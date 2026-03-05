@@ -1,0 +1,5 @@
+{
+  "cursor.general.disableHttp1SSE": true,
+  "cursor.general.disableHttp2": true,
+  "cmake.sourceDirectory": "C:/Users/35058/Desktop/1.3/f4_26_1.1/f4_26_1.1/f4_26_1.1/Drivers/CMSIS/DSP/Source/ComplexMathFunctions"
+}
