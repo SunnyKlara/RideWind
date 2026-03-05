@@ -46,7 +46,7 @@ class AdjustableSvgComponent extends StatelessWidget {
         decoration: debugMode
             ? BoxDecoration(
                 border: Border.all(color: debugColor, width: 2),
-                color: debugColor.withOpacity(0.1),
+                color: debugColor.withAlpha(26),
               )
             : null,
         child: Stack(
@@ -61,7 +61,7 @@ class AdjustableSvgComponent extends StatelessWidget {
                 left: 2,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  color: debugColor.withOpacity(0.8),
+                  color: debugColor.withAlpha(204),
                   child: Text(
                     debugLabel,
                     style: const TextStyle(

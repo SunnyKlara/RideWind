@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'screens/splash_screen.dart';
+import 'screens/no_device_screen.dart';
 import 'providers/bluetooth_provider.dart';
 import 'providers/device_provider.dart';
 import 'services/engine_audio_manager.dart';
+import 'services/first_launch_manager.dart';
 
 void main() async {
   // 🔧 全局错误处理（捕获Release模式下的未处理异常）
@@ -39,7 +41,11 @@ void main() async {
       debugPrint('⚠️ 引擎音效初始化失败（非致命）: $e');
     }
     
-    runApp(const RideWindApp());
+    // 检查是否为首次启动，决定入口页面
+    final firstLaunchManager = FirstLaunchManager();
+    final isFirstLaunch = await firstLaunchManager.isFirstLaunch();
+    
+    runApp(RideWindApp(isFirstLaunch: isFirstLaunch));
   }, (error, stackTrace) {
     debugPrint('❌ 未捕获异常: $error');
     debugPrint('📍 堆栈: $stackTrace');
@@ -47,7 +53,9 @@ void main() async {
 }
 
 class RideWindApp extends StatelessWidget {
-  const RideWindApp({super.key});
+  final bool isFirstLaunch;
+  
+  const RideWindApp({super.key, required this.isFirstLaunch});
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +78,9 @@ class RideWindApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: const SplashScreen(),
+        // 首次启动：显示 SplashScreen（用户协议 + 引导流程）
+        // 非首次启动：直接进入添加设备页面
+        home: isFirstLaunch ? const SplashScreen() : const NoDeviceScreen(),
       ),
     );
   }

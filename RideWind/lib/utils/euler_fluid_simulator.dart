@@ -21,8 +21,23 @@ class EulerFluidSimulator {
   late Float64List _density;
   late Float64List _densityPrev;
 
+  // 涡度场（用于涡度约束）
+  late Float64List _curl;
+
+  // 涡度约束强度
+  double vorticityStrength;
+
+  // 衰减参数
+  final double decayRate;
+  final double velocityDecay;
+  final double densityThreshold;
+
   // 迭代次数（用于求解泊松方程）
   final int iterations;
+
+  // 湍流相关
+  int _frameCount = 0;
+  final Random _random = Random();
 
   EulerFluidSimulator({
     this.gridWidth = 64,
@@ -31,6 +46,10 @@ class EulerFluidSimulator {
     this.diffusion = 0.0001,
     this.viscosity = 0.0001,
     this.iterations = 20,
+    this.vorticityStrength = 0.1,
+    this.decayRate = 0.99,
+    this.velocityDecay = 0.998,
+    this.densityThreshold = 0.005,
   }) {
     final size = gridWidth * gridHeight;
     _u = Float64List(size);
@@ -39,6 +58,7 @@ class EulerFluidSimulator {
     _vPrev = Float64List(size);
     _density = Float64List(size);
     _densityPrev = Float64List(size);
+    _curl = Float64List(size);
   }
 
   /// 获取一维索引
@@ -66,27 +86,29 @@ class EulerFluidSimulator {
 
   /// 模拟一步
   void step() {
-    // 速度场演化
+    // 1. 速度场扩散
     _diffuse(1, _uPrev, _u, viscosity);
     _diffuse(2, _vPrev, _v, viscosity);
-
     _project(_uPrev, _vPrev, _u, _v);
 
+    // 2. 速度场平流
     _advect(1, _u, _uPrev, _uPrev, _vPrev);
     _advect(2, _v, _vPrev, _uPrev, _vPrev);
-
     _project(_u, _v, _uPrev, _vPrev);
 
-    // 密度场演化
+    // 3. 涡度约束
+    _applyVorticityConfinement();
+
+    // 4. 湍流扰动
+    _applyTurbulence();
+
+    // 5. 密度场演化
     _diffuse(0, _densityPrev, _density, diffusion);
     _advect(0, _density, _densityPrev, _u, _v);
 
-    // 衰减
-    for (int i = 0; i < _density.length; i++) {
-      _density[i] *= 0.99;
-      _u[i] *= 0.999;
-      _v[i] *= 0.999;
-    }
+    // 6. 衰减与清理
+    _applyDecay();
+    _cleanupLowDensity();
   }
 
   /// 扩散（热传导/粘性扩散）
@@ -200,11 +222,10 @@ class EulerFluidSimulator {
           b == 2 ? -x[_idx(i, gridHeight - 2)] : x[_idx(i, gridHeight - 2)];
     }
 
-    // 左右边界
+    // 左右边界（Neumann 开放边界条件：复制相邻内部单元值）
     for (int j = 1; j < gridHeight - 1; j++) {
-      x[_idx(0, j)] = b == 1 ? -x[_idx(1, j)] : x[_idx(1, j)];
-      x[_idx(gridWidth - 1, j)] =
-          b == 1 ? -x[_idx(gridWidth - 2, j)] : x[_idx(gridWidth - 2, j)];
+      x[_idx(0, j)] = x[_idx(1, j)];
+      x[_idx(gridWidth - 1, j)] = x[_idx(gridWidth - 2, j)];
     }
 
     // 四个角
@@ -216,6 +237,65 @@ class EulerFluidSimulator {
     x[_idx(gridWidth - 1, gridHeight - 1)] = 0.5 *
         (x[_idx(gridWidth - 2, gridHeight - 1)] +
             x[_idx(gridWidth - 1, gridHeight - 2)]);
+  }
+
+  /// 湍流扰动：基于帧计数的时变随机扰动
+  void _applyTurbulence() {
+    final amplitude = 0.05 * (0.8 + 0.2 * sin(_frameCount * 0.1));
+    for (int j = 1; j < gridHeight - 1; j++) {
+      for (int i = 1; i < gridWidth - 1; i++) {
+        final idx = _idx(i, j);
+        _u[idx] += amplitude * (_random.nextDouble() - 0.5);
+        _v[idx] += amplitude * (_random.nextDouble() - 0.5);
+      }
+    }
+    _frameCount++;
+  }
+
+  /// 衰减：对密度场和速度场施加逐帧衰减
+  void _applyDecay() {
+    for (int i = 0; i < _density.length; i++) {
+      _density[i] *= decayRate;
+      _u[i] *= velocityDecay;
+      _v[i] *= velocityDecay;
+    }
+  }
+
+  /// 清理低密度：将低于阈值的密度归零
+  void _cleanupLowDensity() {
+    for (int i = 0; i < _density.length; i++) {
+      if (_density[i] > 0 && _density[i] < densityThreshold) {
+        _density[i] = 0;
+      }
+    }
+  }
+
+  /// 涡度约束（Vorticity Confinement）
+  /// 补偿数值耗散导致的涡旋细节丢失
+  void _applyVorticityConfinement() {
+    // 1. 计算涡度场 curl = ∂v/∂x - ∂u/∂y
+    for (int j = 1; j < gridHeight - 1; j++) {
+      for (int i = 1; i < gridWidth - 1; i++) {
+        _curl[_idx(i, j)] =
+            (_v[_idx(i + 1, j)] - _v[_idx(i - 1, j)] -
+             _u[_idx(i, j + 1)] + _u[_idx(i, j - 1)]) * 0.5;
+      }
+    }
+
+    // 2. 计算涡度梯度方向并施加约束力
+    for (int j = 1; j < gridHeight - 1; j++) {
+      for (int i = 1; i < gridWidth - 1; i++) {
+        final dwDx = (_curl[_idx(i + 1, j)].abs() - _curl[_idx(i - 1, j)].abs()) * 0.5;
+        final dwDy = (_curl[_idx(i, j + 1)].abs() - _curl[_idx(i, j - 1)].abs()) * 0.5;
+        final len = sqrt(dwDx * dwDx + dwDy * dwDy) + 1e-5;
+        final nx = dwDx / len;
+        final ny = dwDy / len;
+
+        final curlVal = _curl[_idx(i, j)];
+        _u[_idx(i, j)] += vorticityStrength * (ny * curlVal);
+        _v[_idx(i, j)] -= vorticityStrength * (nx * curlVal);
+      }
+    }
   }
 
   /// 获取密度场（用于渲染）
@@ -237,5 +317,7 @@ class EulerFluidSimulator {
     _vPrev.fillRange(0, _vPrev.length, 0);
     _density.fillRange(0, _density.length, 0);
     _densityPrev.fillRange(0, _densityPrev.length, 0);
+    _curl.fillRange(0, _curl.length, 0);
+    _frameCount = 0;
   }
 }

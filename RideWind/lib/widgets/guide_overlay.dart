@@ -153,7 +153,7 @@ class _GuideOverlayState extends State<GuideOverlay>
               child: CustomPaint(
                 painter: HighlightMaskPainter(
                   targetRect: _targetRect,
-                  overlayColor: Colors.black.withOpacity(0.75),
+                  overlayColor: Colors.black.withAlpha(191),
                   highlightPadding: 8.0,
                   highlightBorderRadius: 8.0,
                 ),
@@ -455,12 +455,12 @@ class _TooltipContent extends StatelessWidget {
         color: const Color(0xFF1E1E1E),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF25C485).withOpacity(0.3),
+          color: const Color(0xFF25C485).withAlpha(77),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withAlpha(77),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -483,7 +483,7 @@ class _TooltipContent extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF25C485).withOpacity(0.15),
+                    color: const Color(0xFF25C485).withAlpha(38),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -511,7 +511,7 @@ class _TooltipContent extends StatelessWidget {
           Text(
             step.description,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
+              color: Colors.white.withAlpha(204),
               fontSize: 14,
               height: 1.5,
             ),
@@ -548,7 +548,7 @@ class _StepIndicator extends StatelessWidget {
         Text(
           '步骤 $currentStep / $totalSteps',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.6),
+            color: Colors.white.withAlpha(153),
             fontSize: 12,
           ),
         ),
@@ -566,7 +566,7 @@ class _StepIndicator extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isActive
                     ? const Color(0xFF25C485)
-                    : Colors.white.withOpacity(0.3),
+                    : Colors.white.withAlpha(77),
                 borderRadius: BorderRadius.circular(4),
               ),
             );
@@ -602,7 +602,7 @@ class _NavigationButtons extends StatelessWidget {
           TextButton(
             onPressed: onSkip,
             style: TextButton.styleFrom(
-              foregroundColor: Colors.white.withOpacity(0.6),
+              foregroundColor: Colors.white.withAlpha(153),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
             child: const Text('跳过'),

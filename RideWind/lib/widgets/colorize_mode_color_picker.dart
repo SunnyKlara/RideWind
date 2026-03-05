@@ -93,7 +93,7 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
         },
         child: Container(
           height: 230,
-          color: widget.debugMode ? Colors.black.withOpacity(0.1) : Colors.transparent,
+          color: widget.debugMode ? Colors.black.withAlpha(26) : Colors.transparent,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -243,19 +243,19 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
                       boxShadow: distanceFromCenter == 0 
                         ? [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
+                              color: Colors.black.withAlpha(102),
                               blurRadius: 12,
                               offset: const Offset(0, 6),
                             ),
                             BoxShadow(
-                              color: (isSolid ? solidColor! : gradientColors!.first).withOpacity(0.2),
+                              color: (isSolid ? solidColor! : gradientColors!.first).withAlpha(51),
                               blurRadius: 20,
                               spreadRadius: 2,
                             ),
                           ]
                         : [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withAlpha(51),
                               blurRadius: 6,
                               offset: const Offset(0, 3),
                             ),
@@ -267,7 +267,7 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
                     width: capsuleWidth,
                     height: capsuleHeight,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(1.0 - brightness),
+                      color: Colors.black.withAlpha(((1.0 - brightness) * 255).round()),
                       borderRadius: BorderRadius.circular(23.5),
                     ),
                   ),
@@ -320,7 +320,7 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.7),
+          color: Colors.black.withAlpha(179),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.yellow, width: 1),
         ),

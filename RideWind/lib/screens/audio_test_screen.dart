@@ -25,11 +25,6 @@ class _AudioTestScreenState extends State<AudioTestScreen> {
     }
   }
 
-  Future<bool> _onWillPop() async {
-    await _handleBackNavigation();
-    return false;
-  }
-
   @override
   void dispose() {
     _player.dispose();
@@ -73,8 +68,13 @@ class _AudioTestScreenState extends State<AudioTestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          await _handleBackNavigation();
+        }
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(
@@ -95,7 +95,7 @@ class _AudioTestScreenState extends State<AudioTestScreen> {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: _isPlaying ? Colors.green.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+                  color: _isPlaying ? Colors.green.withAlpha(51) : Colors.grey.withAlpha(51),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: _isPlaying ? Colors.green : Colors.grey,
@@ -173,7 +173,7 @@ class _AudioTestScreenState extends State<AudioTestScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.2),
+                  color: Colors.blue.withAlpha(51),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.blue, width: 1),
                 ),

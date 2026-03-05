@@ -19,7 +19,7 @@ class ModeTextWidget extends StatelessWidget {
       decoration: debugMode
           ? BoxDecoration(
               border: Border.all(color: Colors.orange, width: 2),
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withAlpha(26),
             )
           : null,
       child: Text(
@@ -33,7 +33,7 @@ class ModeTextWidget extends StatelessWidget {
           // SVG中的阴影效果：白色半透明高斯模糊
           shadows: [
             Shadow(
-              color: Colors.white.withOpacity(0.54),
+              color: Colors.white.withAlpha(138),
               blurRadius: 4, // stdDeviation="2" → blurRadius ≈ 4
               offset: const Offset(0, 0),
             ),

@@ -1,186 +1,152 @@
-# RideWind APP 用户体验分析与优化建议文档
+# 需求文档：RideWind APP 用户体验优化
 
-> 📅 文档日期: 2026-02-16
-> 📱 项目: RideWind 智能 LED 风扇蓝牙控制应用
-> 🎯 目标: 全面分析现有用户体验问题，提供详细优化方案
+## 简介
 
----
+本文档定义了 RideWind 智能 LED 风扇蓝牙控制应用的用户体验优化需求。优化范围涵盖三个核心领域：导航流程修复、废弃 API 替换、冗余代码清理。目标是提升应用稳定性、消除编译警告、减少维护成本。
 
-## 一、导航流程问题
+## 术语表
 
-### 1.1 SplashScreen 使用 push 而非 pushReplacement
+- **App**: RideWind Flutter 蓝牙控制应用
+- **Navigator**: Flutter 的页面导航管理器，管理页面栈的 push/pop 操作
+- **SplashScreen**: 应用启动页面，展示 Logo 和用户协议
+- **OnboardingFlowScreen**: 引导流程页面，包含 3 页权限说明
+- **DeviceScanScreen**: 设备扫描页面，执行蓝牙扫描并发现设备
+- **NoDeviceScreen**: 未连接设备页面，扫描未找到设备时显示
+- **DeviceConnectScreen**: 核心设备控制页面，包含所有模式控制功能
+- **DeviceListScreen**: 设备列表页面，管理已连接设备
+- **BluetoothProvider**: 蓝牙状态管理器，管理扫描、连接、断开等蓝牙操作
+- **WillPopScope**: Flutter 已废弃的返回键拦截组件
+- **PopScope**: Flutter 推荐的返回键拦截组件，替代 WillPopScope
+- **withOpacity()**: Color 类已废弃的透明度设置方法
+- **withAlpha()**: Color 类推荐的透明度设置方法，替代 withOpacity()
+- **pushReplacement**: Navigator 方法，替换当前页面（不保留在栈中）
+- **push**: Navigator 方法，将新页面压入栈顶（保留当前页面）
+- **导航栈**: Navigator 维护的页面历史记录栈
 
-**问题描述:**
-`splash_screen.dart` 中 `_navigateToOnboarding()` 方法使用 `Navigator.of(context).push()` 跳转到引导页或扫描页。这意味着 SplashScreen 仍然保留在导航栈中，用户按返回键可能回到启动页，造成困惑。
+## 需求
 
-**影响范围:** 所有用户的首次和非首次启动流程
+### 需求 1：SplashScreen 导航修复
 
-**当前代码:**
-```dart
-// splash_screen.dart - _navigateToOnboarding()
-Navigator.of(context).push(
-  PageRouteBuilder(
-    pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
-    ...
-  ),
-);
-```
+**用户故事：** 作为用户，我希望从启动页进入引导页或扫描页后无法回退到启动页，以获得流畅的单向启动流程。
 
-**优化建议:**
-```dart
-Navigator.of(context).pushReplacement(
-  PageRouteBuilder(
-    pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
-    ...
-  ),
-);
-```
+#### 验收标准
 
-**优先级:** 🔴 高 — 直接影响导航一致性
+1. WHEN SplashScreen 完成加载并跳转到目标页面, THE Navigator SHALL 使用 pushReplacement 替代 push 执行页面跳转
+2. WHEN 用户在 OnboardingFlowScreen 或 DeviceScanScreen 按下系统返回键, THE App SHALL 阻止回退到 SplashScreen
+3. WHEN SplashScreen 跳转完成后, THE Navigator 的页面栈 SHALL 不再包含 SplashScreen 实例
 
----
+### 需求 2：NoDeviceScreen 安全返回导航
 
-### 1.2 NoDeviceScreen 返回按钮可能导致黑屏
+**用户故事：** 作为用户，我希望在未连接设备页面点击返回按钮时始终能正常导航，而不会遇到黑屏或应用崩溃。
 
-**问题描述:**
-`no_device_screen.dart` 中返回按钮调用 `Navigator.of(context).pop()`。如果导航栈中没有上一个页面（例如从 DeviceScanScreen 通过 `pushReplacement` 跳转过来），`pop()` 会导致黑屏或应用退出。
+#### 验收标准
 
-**影响范围:** 扫描未找到设备后的用户流程
+1. WHEN 用户在 NoDeviceScreen 点击返回按钮且导航栈中存在上一页面, THE Navigator SHALL 执行 pop 操作返回上一页面
+2. WHEN 用户在 NoDeviceScreen 点击返回按钮且导航栈中不存在上一页面, THE Navigator SHALL 使用 pushReplacement 跳转到 DeviceScanScreen
+3. WHEN NoDeviceScreen 处理返回操作前, THE App SHALL 调用 canPop() 检查导航栈状态
 
-**当前代码:**
-```dart
-// no_device_screen.dart
-Future<void> _handleBackNavigation(BuildContext context) async {
-  Navigator.of(context).pop(); // 如果栈为空，会导致黑屏
-}
-```
+### 需求 3：蓝牙断开连接用户提示
 
-**优化建议:**
-```dart
-Future<void> _handleBackNavigation(BuildContext context) async {
-  if (Navigator.of(context).canPop()) {
-    Navigator.of(context).pop();
-  } else {
-    // 回到扫描页面或启动页
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const DeviceScanScreen()),
-    );
-  }
-}
-```
+**用户故事：** 作为用户，我希望在蓝牙设备意外断开时收到明确提示并获得重连选项，而不是被静默跳转到扫描页面。
 
-**优先级:** 🔴 高 — 可能导致应用不可用
+#### 验收标准
 
----
+1. WHEN 蓝牙设备在 DeviceConnectScreen 意外断开连接, THE App SHALL 显示一个包含断开提示信息的对话框
+2. WHEN 断开提示对话框显示时, THE App SHALL 提供"重新连接"和"返回扫描"两个操作选项
+3. WHEN 用户选择"重新连接"选项, THE BluetoothProvider SHALL 尝试重新连接到最近断开的设备
+4. WHEN 用户选择"返回扫描"选项, THE Navigator SHALL 使用 pushReplacement 跳转到 DeviceScanScreen
+5. WHEN 重新连接尝试失败, THE App SHALL 显示连接失败提示并保留"返回扫描"选项
 
-### 1.3 蓝牙断开时无预警直接跳转
+### 需求 4：导航策略统一
 
-**问题描述:**
-`bluetooth_provider.dart` 中监听连接状态变化时，断开连接后直接清除设备状态，但没有通知用户或提供重连选项。用户正在操作设备时突然断开，体验非常差。
+**用户故事：** 作为开发者，我希望所有单向流程页面使用一致的导航策略，以避免导航栈管理混乱。
 
-**影响范围:** 所有已连接设备的用户
+#### 验收标准
 
-**当前行为:**
-```dart
-// bluetooth_provider.dart
-_bleService.connectionStream.listen((connected) async {
-  if (!connected) {
-    _connectedDevice?.isConnected = false;
-    _connectedDevice = null;
-    notifyListeners(); // 静默断开，无用户提示
-  }
-});
-```
+1. THE App 中所有单向流程页面（SplashScreen → OnboardingFlowScreen → DeviceScanScreen）SHALL 统一使用 pushReplacement 进行页面跳转
+2. WHEN OnboardingFlowScreen 跳转到 DeviceScanScreen, THE Navigator SHALL 使用 pushReplacement 执行跳转
+3. WHEN SplashScreen 跳转到 OnboardingFlowScreen 或 DeviceScanScreen, THE Navigator SHALL 使用 pushReplacement 执行跳转
 
-**优化建议:**
-- 断开时显示 SnackBar 或 Dialog 提示用户
-- 提供"重新连接"和"返回扫描"两个选项
-- 在 DeviceConnectScreen 中监听连接状态，断开时显示覆盖层
-- 实现自动重连机制（最多尝试 3 次，间隔递增）
 
-**优先级:** 🔴 高 — 严重影响核心使用体验
+### 需求 5：WillPopScope 废弃 API 替换
 
----
+**用户故事：** 作为开发者，我希望将所有 WillPopScope 替换为 PopScope，以消除编译警告并使用 Flutter 推荐的 API。
 
-### 1.4 OnboardingFlowScreen 到 DeviceScanScreen 的导航不一致
+#### 验收标准
 
-**问题描述:**
-`onboarding_flow_screen.dart` 使用 `pushReplacement` 跳转到 DeviceScanScreen（正确），但 `splash_screen.dart` 使用 `push`（不正确）。导航策略不统一会导致栈管理混乱。
+1. THE App 中所有使用 WillPopScope 的文件 SHALL 替换为 PopScope 组件
+2. WHEN 替换 WillPopScope 为 PopScope 时, THE PopScope SHALL 使用 canPop 和 onPopInvokedWithResult 参数实现等效的返回拦截逻辑
+3. WHEN 替换完成后, THE App SHALL 不再包含任何 WillPopScope 引用
+4. WHEN 替换完成后, THE App 的返回键拦截行为 SHALL 与替换前保持一致
 
-**优化建议:** 统一所有单向流程页面使用 `pushReplacement`，确保用户无法回退到已完成的流程页面。
+涉及文件（10 个）：
+- `lib/screens/no_device_screen.dart`
+- `lib/screens/splash_screen.dart`（_AgreementPage）
+- `lib/screens/welcome_screen.dart`
+- `lib/screens/rgb_color_screen.dart`
+- `lib/screens/register_screen.dart`
+- `lib/screens/permission_screen.dart`
+- `lib/screens/onboarding_screen.dart`
+- `lib/screens/device_list_screen.dart`
+- `lib/screens/cleaning_mode_screen.dart`
+- `lib/screens/audio_test_screen.dart`
 
-**优先级:** 🟡 中
+### 需求 6：withOpacity() 废弃 API 替换
 
----
+**用户故事：** 作为开发者，我希望将所有 withOpacity() 调用替换为 withAlpha()，以消除编译警告并使用 Flutter 推荐的 API。
 
-## 二、废弃 API 使用
+#### 验收标准
 
-### 2.1 WillPopScope 已废弃
+1. THE App 中所有使用 Color.withOpacity() 的代码 SHALL 替换为 Color.withAlpha() 调用
+2. WHEN 替换 withOpacity(x) 为 withAlpha() 时, THE 转换公式 SHALL 为 withAlpha((x * 255).round())
+3. WHEN 替换完成后, THE App SHALL 不再包含任何 withOpacity() 调用
+4. WHEN 替换完成后, THE App 的视觉效果 SHALL 与替换前保持一致
 
-**问题描述:**
-`WillPopScope` 在 Flutter 3.12+ 中已被标记为废弃，应替换为 `PopScope`。
+涉及文件（12+ 个）：
+- `lib/widgets/running_mode_widget.dart`
+- `lib/widgets/guide_overlay.dart`
+- `lib/widgets/user_info_drawer.dart`
+- `lib/widgets/triangle_indicator_painter.dart`
+- `lib/widgets/toast_notification.dart`
+- `lib/widgets/mode_text_widget.dart`
+- `lib/widgets/mode_text_svg_package.dart`
+- `lib/widgets/mode_text_svg.dart`
+- `lib/widgets/mode_text_image.dart`
+- `lib/widgets/mode_button.dart`
+- `lib/widgets/colorize_start_button.dart`
+- `lib/widgets/colorize_mode_rgb_settings.dart`
+- `lib/widgets/colorize_mode_color_picker.dart`
+- `lib/screens/device_scan_screen.dart`
+- `lib/screens/onboarding_flow_screen.dart`
+- `lib/screens/no_device_screen.dart`
 
-**涉及文件:**
-- `lib/screens/no_device_screen.dart` — NoDeviceScreen 的 build 方法
-- `lib/screens/splash_screen.dart` — _AgreementPage 的 build 方法
+### 需求 7：废弃页面文件清理
 
-**当前代码:**
-```dart
-// no_device_screen.dart
-WillPopScope(
-  onWillPop: () => _onWillPop(context),
-  child: Scaffold(...),
-)
-```
+**用户故事：** 作为开发者，我希望删除所有已废弃且不再使用的页面文件，以减少项目体积和维护成本。
 
-**优化建议:**
-```dart
-PopScope(
-  canPop: false,
-  onPopInvokedWithResult: (didPop, result) async {
-    if (!didPop) {
-      await _handleBackNavigation(context);
-    }
-  },
-  child: Scaffold(...),
-)
-```
+#### 验收标准
 
-**优先级:** 🟡 中 — 功能正常但会产生编译警告
+1. THE App SHALL 删除以下已废弃的页面文件：
+   - `lib/screens/onboarding_screen.dart`
+   - `lib/screens/onboarding_screen_new.dart`
+   - `lib/screens/permission_screen.dart`
+   - `lib/screens/permission_screen_new.dart`
+   - `lib/screens/ready_screen.dart`
+   - `lib/screens/ready_screen_new.dart`
+   - `lib/screens/main_control_screen.dart`
+2. WHEN 废弃文件被删除后, THE App SHALL 不存在任何对已删除文件的 import 引用
+3. WHEN 废弃文件被删除后, THE App SHALL 能正常编译且无缺失引用错误
 
----
+### 需求 8：冗余服务文件清理
 
-### 2.2 withOpacity() 已废弃
+**用户故事：** 作为开发者，我希望删除与 ble_service.dart 功能重复的冗余蓝牙服务文件，以简化服务层架构。
 
-**问题描述:**
-`Color.withOpacity()` 在新版 Flutter 中建议替换为 `Color.withValues()` 或使用 `withAlpha()`。项目中多处使用了 `withOpacity()`。
+#### 验收标准
 
-**涉及文件:**
-- `lib/screens/onboarding_flow_screen.dart` — 描述文字颜色、指示器颜色
-- `lib/screens/no_device_screen.dart` — 多个 `withAlpha` 已修正，但仍有 `withOpacity`
-- `lib/screens/device_scan_screen.dart` — 设备弹窗中的图片错误占位
-- `lib/widgets/running_mode_widget.dart` — 多处调试模式颜色
-- `lib/widgets/guide_overlay.dart` — 遮罩层、提示框阴影等
-- `lib/widgets/user_info_drawer.dart` — 遮罩背景色
-
-**示例修复:**
-```dart
-// 旧
-Colors.white.withOpacity(0.8)
-// 新
-Colors.white.withAlpha((0.8 * 255).round())  // = withAlpha(204)
-```
-
-**优先级:** 🟢 低 — 不影响功能，但应逐步替换
-
----
-
-## 三、冗余代码清理
-
-### 3.1 废弃的页面文件（6+ 个）
-
-**问题描述:**
-`APP架构.md` 中明确标注了多个已废弃的页面文件，但仍保留在项目中，增加维护成本和混淆风险。
-
-**应删除的文件:**
- 
+1. THE App SHALL 删除以下冗余服务文件：
+   - `lib/services/bluetooth_service.dart`
+   - `lib/services/jdy08_bluetooth_service.dart`
+   - `lib/services/device_control_service.dart`
+2. WHEN 冗余文件被删除后, THE App SHALL 不存在任何对已删除文件的 import 引用
+3. WHEN 冗余文件被删除后, THE App SHALL 能正常编译且无缺失引用错误
+4. WHEN 冗余文件被删除后, THE App 的蓝牙通信功能 SHALL 通过 ble_service.dart 和 protocol_service.dart 正常运行

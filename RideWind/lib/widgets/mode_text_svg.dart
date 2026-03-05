@@ -15,7 +15,7 @@ class ModeTextSvg extends StatelessWidget {
       decoration: debugMode
           ? BoxDecoration(
               border: Border.all(color: Colors.orange, width: 2),
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withAlpha(26),
             )
           : null,
       child: CustomPaint(size: _getSize(), painter: _ModeTextPainter(mode)),
@@ -49,7 +49,7 @@ class _ModeTextPainter extends CustomPainter {
 
     // 应用SVG的阴影效果（高斯模糊）
     final shadowPaint = Paint()
-      ..color = Colors.white.withOpacity(0.54)
+      ..color = Colors.white.withAlpha(138)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
 
     // 根据模式选择对应的path

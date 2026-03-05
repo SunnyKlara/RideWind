@@ -542,7 +542,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
       return Container(
         // 🔧 修复黑屏问题：始终使用透明背景，让父组件的背景图片显示
         // 调试模式下使用绿色背景便于确认组件渲染
-        color: widget.debugMode ? Colors.green.withOpacity(0.7) : Colors.transparent,
+        color: widget.debugMode ? Colors.green.withAlpha(179) : Colors.transparent,
         child: Stack(
         children: [
           // 🔴 临时添加一个明显的测试文本，确认组件被渲染
@@ -580,7 +580,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.8),
+                    color: Colors.red.withAlpha(204),
                     borderRadius: BorderRadius.circular(20),
                   ),
                 child: Row(
@@ -628,7 +628,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
                   },
                   child: Container(
                     color: widget.debugMode
-                        ? Colors.orange.withOpacity(0.3)
+                        ? Colors.orange.withAlpha(77)
                         : Colors.transparent,
                     child: widget.debugMode
                         ? Center(
@@ -784,10 +784,10 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
               height: 200,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.85),
+                color: Colors.black.withAlpha(217),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Colors.green.withOpacity(0.5),
+                  color: Colors.green.withAlpha(128),
                   width: 1,
                 ),
               ),
@@ -852,7 +852,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
       debugPrint('❌ RunningModeWidget 渲染错误: $e');
       debugPrint('📍 堆栈跟踪: $stackTrace');
       return Container(
-        color: Colors.orange.withOpacity(0.3),
+        color: Colors.orange.withAlpha(77),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -899,7 +899,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
         if (widget.debugMode)
           Positioned.fill(
             child: Container(
-              color: Colors.purple.withOpacity(0.3),
+              color: Colors.purple.withAlpha(77),
               child: const Center(
                 child: Text(
                   '🎡 Speed Control Stack',
@@ -1058,7 +1058,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
             width: lineLength,
             height: 2.5,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(lineOpacity),
+              color: Colors.white.withAlpha((lineOpacity * 255).round()),
               borderRadius: BorderRadius.circular(1.25),
             ),
           ),
@@ -1114,7 +1114,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
                       Text(
                         _convertSpeedForDisplay(speed).toString(),
                         style: TextStyle(
-                          color: isCurrent ? Colors.white : const Color(0xFFC94A4A).withOpacity(opacity * 0.7),
+                          color: isCurrent ? Colors.white : const Color(0xFFC94A4A).withAlpha((opacity * 0.7 * 255).round()),
                           fontSize: isCurrent ? config.selectedSpeedFontSize : config.speedFontSize,
                           fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w800,
                           letterSpacing: isCurrent ? 4 : 2,
@@ -1127,7 +1127,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
                               blurRadius: 8,
                             ),
                             Shadow(
-                              color: Colors.black.withOpacity(0.8),
+                              color: Colors.black.withAlpha(204),
                               offset: const Offset(2, 6),
                               blurRadius: 12,
                             ),

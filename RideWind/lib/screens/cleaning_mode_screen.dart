@@ -13,15 +13,15 @@ class CleaningModeScreen extends StatelessWidget {
     );
   }
 
-  Future<bool> _onWillPop(BuildContext context) async {
-    await _handleBackNavigation(context);
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () => _onWillPop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          await _handleBackNavigation(context);
+        }
+      },
       child: SafeArea(
         child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -62,7 +62,7 @@ class CleaningModeScreen extends StatelessWidget {
             Container(
               height: 200,
               decoration: BoxDecoration(
-                color: Colors.grey[900]?.withOpacity(0.3),
+                color: Colors.grey[900]?.withAlpha(77),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Center(

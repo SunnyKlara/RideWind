@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'device_scan_screen.dart';
+import 'no_device_screen.dart';
 import '../services/first_launch_manager.dart';
 
 /// 引导流程页面 - 使用 PageView 实现丝滑滑动
@@ -35,16 +35,18 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
     }
   }
 
-  /// 完成引导流程并跳转到设备扫描页面
+  /// 完成引导流程并跳转到添加设备页面（NoDeviceScreen）
   /// 先调用 markOnboardingComplete() 持久化完成状态，然后导航
+  /// 使用 pushAndRemoveUntil 清空栈，确保 NoDeviceScreen 成为栈底，返回即退出APP
   Future<void> _completeOnboardingAndNavigate() async {
     // 标记引导流程已完成
     await _firstLaunchManager.markOnboardingComplete();
     
-    // 跳转到设备扫描页面
+    // 清空导航栈，将 NoDeviceScreen 设为根页面
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const DeviceScanScreen()),
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const NoDeviceScreen()),
+        (route) => false, // 移除所有旧路由
       );
     }
   }
@@ -172,7 +174,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
           Text(
             description,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.8), // 增加不透明度，提高可读性
+              color: Colors.white.withAlpha(204), // 增加不透明度，提高可读性
               fontSize: 20, // 增大副标题字体大小
               height: 1.5, // 调整行高
               fontWeight: FontWeight.w400, // 增加字重
@@ -222,7 +224,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen> {
       width: isActive ? 20 : 40,
       height: 8,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(isActive ? 1.0 : 0.6),
+        color: Colors.white.withAlpha(isActive ? 255 : 153),
         borderRadius: BorderRadius.circular(4),
       ),
     );

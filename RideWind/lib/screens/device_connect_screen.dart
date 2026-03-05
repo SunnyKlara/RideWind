@@ -17,6 +17,7 @@ import '../services/feedback_service.dart'; // ✅ 操作反馈服务
 import '../services/preference_service.dart'; // ✅ 用户偏好存储服务
 import 'device_scan_screen.dart'; // 扫描页面
 import 'device_list_screen.dart'; // 设备列表页面
+import 'no_device_screen.dart'; // 添加设备页面（APP主页）
 import 'logo_upload_e2e_test_screen.dart'; // Logo上传界面（唯一可用的方案）
 import 'dev_test_screen.dart'; // 🧪 开发测试界面
 
@@ -490,9 +491,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         // 💾 保存设备设置（断连前）
         _saveDeviceSettings();
         _navigatedOnDisconnect = true;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const DeviceScanScreen()),
-        );
+        _showDisconnectDialog();
       }
     });
 
@@ -605,6 +604,98 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
     } catch (e) {
       debugPrint('❌ 保存设备特定设置失败: $e');
     }
+  }
+
+  /// 显示蓝牙断开连接提示对话框
+  void _showDisconnectDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.bluetooth_disabled, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Text('设备已断开', style: TextStyle(color: Colors.white, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          '蓝牙连接已断开，请选择操作：',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              // pop 回到 DeviceListScreen（栈: NoDevice → DeviceList → Connect）
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('返回设备列表', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _attemptReconnect();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25C485)),
+            child: const Text('重新连接'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 尝试重新连接设备
+  Future<void> _attemptReconnect() async {
+    final btProvider = Provider.of<BluetoothProvider>(context, listen: false);
+    final success = await btProvider.connectToDevice(widget.device);
+    if (mounted) {
+      if (success) {
+        _navigatedOnDisconnect = false;
+      } else {
+        _showReconnectFailedDialog();
+      }
+    }
+  }
+
+  /// 显示重连失败提示
+  void _showReconnectFailedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('连接失败', style: TextStyle(color: Colors.white, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          '无法重新连接到设备，请检查设备状态后重试。',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              // pop 回到 DeviceListScreen
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            child: const Text('返回设备列表'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ╔════════════════════════════════════════════════════════════════════════╗
@@ -1103,11 +1194,16 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
       }
     }
 
-    // 优先级 2: 返回设备列表
-    debugPrint('✅ 返回设备列表');
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const DeviceListScreen()),
-    );
+    // 优先级 2: 返回到已有的 NoDeviceScreen（pop 回栈中已有页面，避免栈累积）
+    debugPrint('✅ 返回添加设备页');
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      // 兜底：栈底时替换为 NoDeviceScreen
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const NoDeviceScreen()),
+      );
+    }
   }
 
   // ╔════════════════════════════════════════════════════════════════════════╗
@@ -1342,7 +1438,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.8),
+                  color: Colors.green.withAlpha(204),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Row(
@@ -1545,7 +1641,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             },
             child: Container(
               color: _debugMode
-                  ? Colors.blue.withOpacity(0.2)
+                  ? Colors.blue.withAlpha(51)
                   : Colors.transparent,
               child: _debugMode
                   ? const Center(
@@ -1573,9 +1669,9 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(0.3),
-                  Colors.black.withOpacity(0.5),
-                  Colors.black.withOpacity(0.7),
+                  Colors.black.withAlpha(77),
+                  Colors.black.withAlpha(128),
+                  Colors.black.withAlpha(179),
                 ],
               ),
             ),
@@ -1656,8 +1752,8 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: isOn 
-                              ? Colors.green.withOpacity(0.8)
-                              : Colors.grey.withOpacity(0.8),
+                              ? Colors.green.withAlpha(204)
+                              : Colors.grey.withAlpha(204),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -1742,7 +1838,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         }
       },
       children: [
-        const DevTestScreen(), // 🧪 开发测试界面（最左侧）
+        DevTestScreen(isVisible: _currentModeIndex == 0), // 🧪 开发测试界面（最左侧）
         _buildRunningModeContent(config),
         _buildColorizeModeContent(config),
       ],
@@ -2727,7 +2823,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
                               boxShadow: distance == 0
                                   ? [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.4),
+                                        color: Colors.black.withAlpha(102),
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
@@ -2738,7 +2834,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
                                                     : (capsule['colors']
                                                               as List<Color>)
                                                           .first)
-                                                .withOpacity(0.35),
+                                                .withAlpha(89),
                                         blurRadius: 15,
                                         spreadRadius: 1,
                                       ),
@@ -2757,8 +2853,8 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
                               children: [
                                 Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(
-                                      1.0 - brightness,
+                                    color: Colors.black.withAlpha(
+                                      ((1.0 - brightness) * 255).round(),
                                     ),
                                     borderRadius: BorderRadius.circular(
                                       capsuleBorderRadius,
@@ -2937,16 +3033,16 @@ class _TriangleIndicatorPainter extends CustomPainter {
     path.close();
 
     if (isActive) {
-      canvas.drawShadow(path, Colors.black.withOpacity(0.4), 4.0, true);
+      canvas.drawShadow(path, Colors.black.withAlpha(102), 4.0, true);
 
       final glowPaint1 = Paint()
-        ..color = currentColor.withOpacity(0.4)
+        ..color = currentColor.withAlpha(102)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0)
         ..style = PaintingStyle.fill;
       canvas.drawPath(path, glowPaint1);
 
       final glowPaint2 = Paint()
-        ..color = currentColor.withOpacity(0.6)
+        ..color = currentColor.withAlpha(153)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0)
         ..style = PaintingStyle.fill;
       canvas.drawPath(path, glowPaint2);
@@ -3078,7 +3174,7 @@ class _PowerSliderDialogState extends State<_PowerSliderDialog> {
           Text(
             '关机',
             style: TextStyle(
-              color: Colors.white.withOpacity(isShutdownActive ? 1.0 : 0.4),
+              color: Colors.white.withAlpha(isShutdownActive ? 255 : 102),
               fontSize: 14,
               letterSpacing: 4.0,
               fontWeight: isShutdownActive ? FontWeight.bold : FontWeight.w300,
@@ -3119,8 +3215,8 @@ class _PowerSliderDialogState extends State<_PowerSliderDialog> {
                           scale: isShutdownActive ? 1.4 : 1.0,
                           child: Icon(
                             Icons.power_settings_new_rounded,
-                            color: Colors.white.withOpacity(
-                              isShutdownActive ? 1.0 : 0.4,
+                            color: Colors.white.withAlpha(
+                              isShutdownActive ? 255 : 102,
                             ),
                             size: 36,
                           ),
@@ -3133,8 +3229,8 @@ class _PowerSliderDialogState extends State<_PowerSliderDialog> {
                           scale: isRebootActive ? 1.4 : 1.0,
                           child: Icon(
                             Icons.refresh_rounded,
-                            color: Colors.white.withOpacity(
-                              isRebootActive ? 1.0 : 0.4,
+                            color: Colors.white.withAlpha(
+                              isRebootActive ? 255 : 102,
                             ),
                             size: 36,
                           ),
@@ -3180,7 +3276,7 @@ class _PowerSliderDialogState extends State<_PowerSliderDialog> {
           Text(
             '重启',
             style: TextStyle(
-              color: Colors.white.withOpacity(isRebootActive ? 1.0 : 0.4),
+              color: Colors.white.withAlpha(isRebootActive ? 255 : 102),
               fontSize: 14,
               letterSpacing: 4.0,
               fontWeight: isRebootActive ? FontWeight.bold : FontWeight.w300,

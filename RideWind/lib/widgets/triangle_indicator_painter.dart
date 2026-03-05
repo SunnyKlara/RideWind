@@ -18,7 +18,7 @@ class TriangleIndicatorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = isActive ? currentColor : Colors.white.withOpacity(0.3)
+      ..color = isActive ? currentColor : Colors.white.withAlpha(77)
       ..style = PaintingStyle.fill;
 
     // 使用设计图的SVG path（圆角梯形）
@@ -53,18 +53,18 @@ class TriangleIndicatorPainter extends CustomPainter {
     // 多层阴影实现发光效果
     if (isActive) {
       // 第一层：黑色底部阴影
-      canvas.drawShadow(path, Colors.black.withOpacity(0.4), 4.0, true);
+      canvas.drawShadow(path, Colors.black.withAlpha(102), 4.0, true);
       
       // 第二层：颜色发光（外发光）
       final glowPaint1 = Paint()
-        ..color = currentColor.withOpacity(0.4)
+        ..color = currentColor.withAlpha(102)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0)
         ..style = PaintingStyle.fill;
       canvas.drawPath(path, glowPaint1);
       
       // 第三层：更强的颜色发光（内发光）
       final glowPaint2 = Paint()
-        ..color = currentColor.withOpacity(0.6)
+        ..color = currentColor.withAlpha(153)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0)
         ..style = PaintingStyle.fill;
       canvas.drawPath(path, glowPaint2);

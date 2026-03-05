@@ -101,7 +101,7 @@ class _ColorizeModeRGBSettingsState extends State<ColorizeModeRGBSettings> {
                     borderRadius: BorderRadius.circular(23),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.25),
+                        color: Colors.black.withAlpha(64),
                         blurRadius: 6,
                         offset: const Offset(0, 3),
                       ),
@@ -180,7 +180,7 @@ class _ColorizeModeRGBSettingsState extends State<ColorizeModeRGBSettings> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.25),
+                        color: Colors.black.withAlpha(64),
                         offset: const Offset(0, 2),
                         blurRadius: 4,
                       ),
@@ -205,7 +205,7 @@ class _ColorizeModeRGBSettingsState extends State<ColorizeModeRGBSettings> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
+                            color: Colors.black.withAlpha(64),
                             offset: const Offset(0, 2),
                             blurRadius: 9,
                           ),

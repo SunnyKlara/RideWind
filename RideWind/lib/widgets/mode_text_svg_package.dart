@@ -20,7 +20,7 @@ class ModeTextSvgPackage extends StatelessWidget {
       decoration: debugMode
           ? BoxDecoration(
               border: Border.all(color: Colors.orange, width: 2),
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withAlpha(26),
             )
           : null,
       child: SvgPicture.asset(

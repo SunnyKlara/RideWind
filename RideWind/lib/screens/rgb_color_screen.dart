@@ -26,15 +26,15 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
     Navigator.of(context).pop();
   }
 
-  Future<bool> _onWillPop() async {
-    await _handleBackNavigation();
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          await _handleBackNavigation();
+        }
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
@@ -103,7 +103,7 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
                         horizontal: ResponsiveUtils.horizontalPadding(context) * 1.5,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.grey[900]?.withOpacity(0.3),
+                        color: Colors.grey[900]?.withAlpha(77),
                         borderRadius: BorderRadius.circular(
                           ResponsiveUtils.scaledSize(context, 20.0).clamp(16.0, 24.0),
                         ),

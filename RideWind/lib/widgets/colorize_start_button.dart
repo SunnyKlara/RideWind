@@ -51,7 +51,7 @@ class ColorizeStartButton extends StatelessWidget {
         selectedColor,
         Color.lerp(selectedColor, Colors.white, 0.15)!,
         Color.lerp(selectedColor, Colors.black, 0.25)!,
-        selectedColor.withOpacity(0.75),
+        selectedColor.withAlpha(191),
       ];
       gradientStops = [0.0, 0.35, 0.7, 1.0];
     }
@@ -71,14 +71,14 @@ class ColorizeStartButton extends StatelessWidget {
           boxShadow: [
             // 内阴影效果
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withAlpha(51),
               blurRadius: 8,
               offset: const Offset(0, 2),
               spreadRadius: 0,
             ),
             // 外发光效果
             BoxShadow(
-              color: selectedColor.withOpacity(0.4),
+              color: selectedColor.withAlpha(102),
               blurRadius: 15,
               spreadRadius: 1,
               offset: const Offset(0, 3),
@@ -95,7 +95,7 @@ class ColorizeStartButton extends StatelessWidget {
               letterSpacing: 1.5,
               shadows: isWhite ? [] : [
                 Shadow(
-                  color: Colors.black.withOpacity(0.4),
+                  color: Colors.black.withAlpha(102),
                   offset: const Offset(0, 2),
                   blurRadius: 6,
                 ),

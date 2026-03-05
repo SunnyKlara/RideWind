@@ -5,25 +5,24 @@ import '../models/device_model.dart';
 import '../utils/responsive_utils.dart';
 import 'device_connect_screen.dart';
 import 'no_device_screen.dart';
-import '../widgets/user_info_drawer.dart';
 
 class DeviceListScreen extends StatelessWidget {
   const DeviceListScreen({super.key});
 
   Future<void> _handleBackNavigation(BuildContext context) async {
-    debugPrint('🔙 设备列表-返回按钮被点击 → 跳转到未连接页面');
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const NoDeviceScreen()),
-    );
-  }
-
-  Future<bool> _onWillPop(BuildContext context) async {
-    await _handleBackNavigation(context);
-    return false;
+    debugPrint('🔙 设备列表-返回按钮被点击 → 返回上一页');
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      // 栈底兜底：直接回到 NoDeviceScreen
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const NoDeviceScreen()),
+      );
+    }
   }
 
   // ========== 🏀 调试模式开关（设备列表页面）==========
-  static const bool _debugClickAreas = false; // 已关闭调试模式
+  static const bool _debugClickAreas = false; // 调试模式已关闭
 
   // ========== 📍 响应式位置参数方法 ==========
   // 所有位置参数改为动态计算，根据屏幕尺寸自适应
@@ -50,7 +49,7 @@ class DeviceListScreen extends StatelessWidget {
 
   /// 获取设备卡片顶部位置
   static double _getDeviceCardTop(BuildContext context) {
-    return ResponsiveUtils.height(context, 25); // 屏幕高度的25%
+    return ResponsiveUtils.height(context, 20); // 屏幕高度的20%（从25%上移）
   }
 
   /// 获取设备卡片左右边距
@@ -80,8 +79,13 @@ class DeviceListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () => _onWillPop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          await _handleBackNavigation(context);
+        }
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Consumer<BluetoothProvider>(
@@ -172,50 +176,13 @@ class DeviceListScreen extends StatelessWidget {
                   ),
                 ),
 
-                // 用户按钮（透明点击区域）
+                // 用户按钮区域（已移除用户中心功能）
                 Positioned(
                   top: _getTopButtonTop(context),
                   right: _getUserButtonRight(context),
-                  child: GestureDetector(
-                    onTap: () {
-                      debugPrint('👤 用户按钮被点击');
-                      UserInfoDrawer.show(context);
-                    },
-                    child: Container(
-                      width: _getButtonSize(context),
-                      height: _getButtonSize(context),
-                      decoration: BoxDecoration(
-                        color: _debugClickAreas
-                            ? Colors.blue.withAlpha(77)
-                            : Colors.transparent,
-                        border: _debugClickAreas
-                            ? Border.all(color: Colors.blue, width: 3)
-                            : null,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: _debugClickAreas
-                          ? const Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.person,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  Text(
-                                    '用户',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : null,
-                    ),
+                  child: Container(
+                    width: _getButtonSize(context),
+                    height: _getButtonSize(context),
                   ),
                 ),
 
@@ -229,28 +196,48 @@ class DeviceListScreen extends StatelessWidget {
                       final device = bluetoothProvider.devices.isNotEmpty
                           ? bluetoothProvider.devices.first
                           : null;
-                      final isConnected =
-                          bluetoothProvider.connectedDevice?.id == device?.id;
+                      // 判断是否已连接：检查设备列表中的设备或直接检查 connectedDevice
+                      final isConnected = bluetoothProvider.connectedDevice != null &&
+                          (device == null || bluetoothProvider.connectedDevice?.id == device.id);
 
                       return GestureDetector(
-                        // 点击：跳转到界面1
+                        // 点击：仅在已连接时跳转到主控制页面
                         onTap: () {
-                          if (device == null) return;
-                          debugPrint('📱 设备卡片被点击 → 跳转到界面1');
+                          if (!isConnected) {
+                            // 🔴 未连接状态，点击无效，显示提示
+                            debugPrint('🔴 设备未连接，点击无效');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text('设备未连接，请先扫描并连接设备'),
+                                backgroundColor: Colors.red.withAlpha(200),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          // 🟢 已连接状态，跳转到主控制页面
+                          final targetDevice = device 
+                              ?? bluetoothProvider.connectedDevice!;
+                          debugPrint('🟢 设备卡片被点击 → 跳转到主控制页面: ${targetDevice.name}');
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) =>
-                                  DeviceConnectScreen(device: device),
+                                  DeviceConnectScreen(device: targetDevice),
                             ),
                           );
                         },
                         // 长按：显示断开连接对话框（仅已连接时）
                         onLongPress: () {
-                          if (device == null || !isConnected) return;
+                          final targetDevice = device ?? bluetoothProvider.connectedDevice;
+                          if (targetDevice == null || !isConnected) return;
                           debugPrint('🔒 设备卡片被长按 → 显示断开连接对话框');
                           _showDisconnectDialog(
                             context,
-                            device,
+                            targetDevice,
                             bluetoothProvider,
                           );
                         },
@@ -266,11 +253,13 @@ class DeviceListScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: _debugClickAreas
-                              ? const Center(
+                              ? Center(
                                   child: Text(
-                                    '【设备卡片】点击区域\n点击后进入界面1',
+                                    isConnected
+                                        ? '【设备卡片】🟢 已连接\n点击进入控制页面'
+                                        : '【设备卡片】未连接\n点击无效',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,

@@ -6,6 +6,7 @@ import '../models/device_model.dart';
 import '../providers/bluetooth_provider.dart';
 import '../utils/debug_logger.dart'; // 🆕 调试日志
 import 'device_connect_screen.dart';
+import 'device_list_screen.dart';
 import 'no_device_screen.dart';
 
 class DeviceScanScreen extends StatefulWidget {
@@ -101,11 +102,9 @@ class _DeviceScanScreenState extends State<DeviceScanScreen>
       // 检查是否找到设备
       if (btProvider.devices.isEmpty) {
         logger.log('❌ 未找到兼容的蓝牙设备');
-        // 未找到设备，直接跳转到未连接页面
+        // 未找到设备，返回到 NoDeviceScreen（pop 回到已有的 NoDeviceScreen）
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const NoDeviceScreen()),
-          );
+          Navigator.of(context).pop();
         }
         return;
       }
@@ -124,11 +123,9 @@ class _DeviceScanScreenState extends State<DeviceScanScreen>
 
       if (!connected) {
         logger.log('❌ 连接失败！');
-        // 连接失败，跳转到未连接页面
+        // 连接失败，返回到 NoDeviceScreen
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const NoDeviceScreen()),
-          );
+          Navigator.of(context).pop();
         }
         return;
       }
@@ -149,11 +146,9 @@ class _DeviceScanScreenState extends State<DeviceScanScreen>
     } catch (e) {
       logger.log('❌ 异常: $e');
       debugPrint('扫描或连接失败: $e');
-      // 出错直接跳转到未连接页面
+      // 出错返回到 NoDeviceScreen
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const NoDeviceScreen()),
-        );
+        Navigator.of(context).pop();
       }
     }
   }
@@ -316,12 +311,8 @@ class _DeviceScanScreenState extends State<DeviceScanScreen>
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
-                      debugPrint('✅ 跳过扫描按钮被点击 → 跳转到未连接页面');
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (_) => const NoDeviceScreen(),
-                        ),
-                      );
+                      debugPrint('✅ 跳过扫描按钮被点击 → 返回添加设备页面');
+                      Navigator.of(context).pop();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -405,7 +396,7 @@ class _DeviceScanScreenState extends State<DeviceScanScreen>
                     return Container(
                       height: 120,
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.2),
+                        color: Colors.grey.withAlpha(51),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Center(
@@ -428,8 +419,15 @@ class _DeviceScanScreenState extends State<DeviceScanScreen>
                     height: 58,
                     child: ElevatedButton(
                       onPressed: () {
-                        // 跳转到设备连接页面（模式选择页面）
+                        // 先替换 ScanScreen 为 DeviceListScreen，再 push DeviceConnectScreen
+                        // 栈变为: [NoDevice, DeviceList, Connect]
+                        // 回退: Connect → DeviceList → NoDevice → 退出
                         Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => const DeviceListScreen(),
+                          ),
+                        );
+                        Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) =>
                                 DeviceConnectScreen(device: _foundDevice!),

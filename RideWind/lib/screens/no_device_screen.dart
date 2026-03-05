@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'device_scan_screen.dart';
 import 'device_connect_screen.dart';
-import '../widgets/user_info_drawer.dart';
+import 'device_list_screen.dart';
 import '../models/device_model.dart';
 import '../utils/responsive_utils.dart';
 import '../services/feedback_service.dart'; // ✅ 操作反馈服务
@@ -12,13 +13,16 @@ class NoDeviceScreen extends StatelessWidget {
 
   Future<void> _handleBackNavigation(BuildContext context) async {
     debugPrint('🔙 未连接页面-返回按钮被点击');
-    Navigator.of(context).pop();
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      // 已经是导航栈底部，直接退出应用
+      debugPrint('🚪 导航栈为空，退出应用');
+      SystemNavigator.pop();
+    }
   }
 
-  Future<bool> _onWillPop(BuildContext context) async {
-    await _handleBackNavigation(context);
-    return false;
-  }
+
 
   /// 显示排查建议对话框
   void _showTroubleshootingDialog(BuildContext context) {
@@ -139,8 +143,13 @@ class NoDeviceScreen extends StatelessWidget {
     final topGradientHeight = _getTopGradientHeight(context);
     final devButtonBottom = _getDevButtonBottom(context);
 
-    return WillPopScope(
-      onWillPop: () => _onWillPop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          await _handleBackNavigation(context);
+        }
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
@@ -221,46 +230,13 @@ class NoDeviceScreen extends StatelessWidget {
               ),
             ),
 
-            // 用户按钮（透明点击区域）
+            // 用户按钮（透明点击区域 - 保留背景图位置占位）
             Positioned(
               top: backButtonTop,
               right: userButtonRight,
-              child: GestureDetector(
-                onTap: () {
-                  debugPrint('👤 用户按钮被点击');
-                  UserInfoDrawer.show(context);
-                },
-                child: Container(
-                  width: buttonSize,
-                  height: buttonSize,
-                  decoration: BoxDecoration(
-                    color: _debugClickAreas
-                        ? Colors.blue.withAlpha(77)
-                        : Colors.transparent,
-                    border: _debugClickAreas
-                        ? Border.all(color: Colors.blue, width: 3)
-                        : null,
-                    borderRadius: BorderRadius.circular(buttonSize / 2),
-                  ),
-                  child: _debugClickAreas
-                      ? const Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.person, color: Colors.white, size: 20),
-                              Text(
-                                '用户',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : null,
-                ),
+              child: Container(
+                width: buttonSize,
+                height: buttonSize,
               ),
             ),
 
@@ -318,13 +294,20 @@ class NoDeviceScreen extends StatelessWidget {
               left: 20,
               child: GestureDetector(
                 onTap: () {
-                  debugPrint('🔧 开发者模式按钮被点击 → 直接进入控制页面');
+                  debugPrint('🔧 开发者模式按钮被点击 → 进入设备列表 → 控制页面');
                   // 创建一个虚拟设备用于UI调试
                   final mockDevice = DeviceModel(
                     id: 'dev-mock-001',
                     name: 'DEV Mock Device',
                     rssi: -50,
                     isConnected: true,
+                  );
+                  // 先 push DeviceListScreen，再 push DeviceConnectScreen
+                  // 栈: [NoDevice, DeviceList, Connect]
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const DeviceListScreen(),
+                    ),
                   );
                   Navigator.of(context).push(
                     MaterialPageRoute(

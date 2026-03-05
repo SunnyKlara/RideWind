@@ -278,11 +278,11 @@ class _ToastWidgetState extends State<_ToastWidget>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: widget.backgroundColor.withOpacity(0.9),
+                color: widget.backgroundColor.withAlpha(230),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withAlpha(51),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -350,7 +350,7 @@ class _LoadingOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withAlpha(128),
       child: Center(
         child: Container(
           padding: const EdgeInsets.all(24),
@@ -359,7 +359,7 @@ class _LoadingOverlay extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withAlpha(26),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

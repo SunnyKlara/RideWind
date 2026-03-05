@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'onboarding_flow_screen.dart';
 import 'device_scan_screen.dart';
+import 'no_device_screen.dart';
 import '../services/first_launch_manager.dart';
 
 /// 启动页面 - APP打开后的第一个页面
@@ -79,11 +80,13 @@ class _SplashScreenState extends State<SplashScreen>
       });
 
       // 根据首次启动状态决定跳转目标
+      // 首次启动：显示引导流程
+      // 非首次启动：直接进入添加设备页面（NoDeviceScreen）
       final Widget targetScreen = isFirstLaunch
           ? const OnboardingFlowScreen()
-          : const DeviceScanScreen();
+          : const NoDeviceScreen();
 
-      Navigator.of(context).push(
+      Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -468,15 +471,15 @@ class _AgreementPage extends StatelessWidget {
     Navigator.of(context).pop();
   }
 
-  Future<bool> _onWillPop(BuildContext context) async {
-    await _handleBackNavigation(context);
-    return false;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () => _onWillPop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) {
+          await _handleBackNavigation(context);
+        }
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(

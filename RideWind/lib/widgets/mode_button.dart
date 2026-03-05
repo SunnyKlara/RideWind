@@ -27,25 +27,25 @@ class ModeButton extends StatelessWidget {
             colors: isGreen
                 ? [
                     const Color(0xFF25C485), // 绿色起始
-                    const Color(0xFF28FAA6).withOpacity(0.6), // 绿色结束（60%透明度）
+                    const Color(0xFF28FAA6).withAlpha(153), // 绿色结束（60%透明度）
                   ]
                 : [
                     const Color(0xFFFF4444), // 红色起始
-                    const Color(0xFFFF6666).withOpacity(0.6), // 红色结束（60%透明度）
+                    const Color(0xFFFF6666).withAlpha(153), // 红色结束（60%透明度）
                   ],
           ),
           boxShadow: [
             // 外阴影
             BoxShadow(
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.black.withAlpha(64),
               offset: const Offset(0, 2),
               blurRadius: 4,
             ),
             // 内阴影效果（通过多层阴影模拟）
             BoxShadow(
               color: isGreen
-                  ? const Color(0xFF0B2922).withOpacity(0.66)
-                  : const Color(0xFF290B0B).withOpacity(0.66),
+                  ? const Color(0xFF0B2922).withAlpha(168)
+                  : const Color(0xFF290B0B).withAlpha(168),
               offset: const Offset(0, 0),
               blurRadius: 6,
               spreadRadius: -3,
