@@ -9,6 +9,19 @@ enum TooltipPosition {
   right,
 }
 
+/// 手势类型枚举
+/// 定义引导步骤所需的用户操作类型
+enum GestureType {
+  tap,
+  longPress,
+  swipeLeft,
+  swipeRight,
+  swipeUp,
+  swipeDown,
+  dragHorizontal,
+  dragVertical,
+}
+
 /// 引导步骤定义
 /// 用于定义功能引导中的单个步骤
 class GuideStep {
@@ -27,12 +40,16 @@ class GuideStep {
   /// 可选图标，用于增强视觉提示
   final IconData? icon;
 
+  /// 手势类型，定义该步骤所需的用户手势，默认为 tap
+  final GestureType gestureType;
+
   const GuideStep({
     required this.targetKey,
     required this.title,
     required this.description,
     this.position = TooltipPosition.bottom,
     this.icon,
+    this.gestureType = GestureType.tap,
   });
 }
 

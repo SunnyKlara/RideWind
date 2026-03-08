@@ -10,7 +10,8 @@ import '../utils/debug_logger.dart'; // ✅ 导入日志工具
 import '../utils/colorize_throttler.dart'; // 🔄 RGB调色节流器
 import '../controllers/airflow_indicator_controller.dart'; // 🌫️ 雾化器指示器控制器
 import '../widgets/running_mode_widget.dart'; // Running Mode 独立组件
-import '../widgets/guide_overlay.dart'; // ✅ 功能引导覆盖层
+import '../widgets/enhanced_guide_overlay.dart'; // ✅ 增强功能引导覆盖层
+import '../widgets/guide_tooltip_styles.dart'; // ✅ 引导提示框样式
 import '../models/guide_models.dart'; // ✅ 引导数据模型
 import '../services/feature_guide_service.dart'; // ✅ 功能引导服务
 import '../services/feedback_service.dart'; // ✅ 操作反馈服务
@@ -20,6 +21,7 @@ import 'device_list_screen.dart'; // 设备列表页面
 import 'no_device_screen.dart'; // 添加设备页面（APP主页）
 import 'logo_upload_e2e_test_screen.dart'; // Logo上传界面（唯一可用的方案）
 import 'dev_test_screen.dart'; // 🧪 开发测试界面
+import '../widgets/chinese_color_wheel_overlay.dart'; // 🎨 中华传统色彩圆盘
 
 // ╔══════════════════════════════════════════════════════════════╗
 // ║          🔄 控制模式枚举（3个模式）                            ║
@@ -311,6 +313,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
   // ========== 🎨 Colorize Mode 专用状态 ==========
   ColorizeState _colorizeState = ColorizeState.preset;
+  bool _hasCustomColors = false; // 🎨 颜色来源标志位：true=自定义RGB，false=预设
   int _lastSentHardwareUI = -1;
   DateTime _lastColorSyncTime = DateTime.now();
   DateTime _lastPresetSyncTime = DateTime.now();
@@ -332,6 +335,11 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
   final Map<String, int> _greenValues = {'L': 20, 'M': 20, 'R': 20, 'B': 50};
   final Map<String, int> _blueValues = {'L': 0, 'M': 0, 'R': 0, 'B': 0};
 
+  // 🎨 RGB 数值手动输入状态
+  String? _editingRGBChannel; // null=无编辑, 'R'/'G'/'B'
+  final TextEditingController _rgbValueController = TextEditingController();
+  final FocusNode _rgbValueFocusNode = FocusNode();
+
   double _brightnessValue = 1.0;
 
   Timer? _cycleTimer;
@@ -343,6 +351,20 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
   OverlayEntry? _guideOverlayEntry;
   bool _hasCheckedRunningModeGuide = false;
   bool _hasCheckedColorizeModeGuide = false;
+
+  // 🎯 引导目标 GlobalKey（绑定到实际 UI 元素）
+  final GlobalKey _carImageKey = GlobalKey(debugLabel: 'carImage');
+  final GlobalKey _lowerHalfKey = GlobalKey(debugLabel: 'lowerHalf');
+  final GlobalKey _colorCapsuleStripKey = GlobalKey(debugLabel: 'colorCapsuleStrip');
+  final GlobalKey _startColoringButtonKey = GlobalKey(debugLabel: 'startColoringButton');
+  final GlobalKey _paletteButtonKey = GlobalKey(debugLabel: 'paletteButton');
+  final GlobalKey _lmrbCapsulesKey = GlobalKey(debugLabel: 'lmrbCapsules');
+  final GlobalKey _rgbSlidersKey = GlobalKey(debugLabel: 'rgbSliders');
+  final GlobalKey _brightnessBarKey = GlobalKey(debugLabel: 'brightnessBar');
+
+  // 🎯 存储 RunningModeWidget 通过 onKeysReady 回调传递的 key
+  Map<String, GlobalKey> _runningModeKeys = {};
+
   final List<String> _cyclePositions = ['L', 'M', 'R', 'B'];
   int _cyclePositionIndex = 0;
 
@@ -454,6 +476,9 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
     super.initState();
     debugPrint('🚀🚀🚀 DeviceConnectScreen initState 开始');
     
+    // 🎨 RGB 数值输入焦点监听
+    _rgbValueFocusNode.addListener(_onRGBValueFocusChanged);
+
     // 初始化模式页面控制器
     _modePageController = PageController(initialPage: _currentModeIndex);
     debugPrint('🚀 [1/5] PageController 初始化完成');
@@ -585,6 +610,25 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
       if (_colorPageController.hasClients && _selectedColorIndex > 0) {
         _colorPageController.jumpToPage(_selectedColorIndex);
       }
+
+      // 🎨 恢复自定义 RGB 颜色状态
+      final hasCustom = await _preferenceService.getHasCustomColors();
+      if (hasCustom) {
+        final savedColors = await _preferenceService.getCustomRGBColors();
+        if (savedColors != null && mounted) {
+          setState(() {
+            for (final zone in ['L', 'M', 'R', 'B']) {
+              if (savedColors.containsKey(zone)) {
+                _redValues[zone] = savedColors[zone]!['r']!;
+                _greenValues[zone] = savedColors[zone]!['g']!;
+                _blueValues[zone] = savedColors[zone]!['b']!;
+              }
+            }
+            _hasCustomColors = true;
+          });
+          debugPrint('💾 自定义 RGB 颜色已恢复: $savedColors');
+        }
+      }
     } catch (e) {
       debugPrint('❌ 恢复用户偏好失败: $e');
     }
@@ -702,13 +746,67 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
   // ║  📚 功能引导逻辑                                                        ║
   // ╚════════════════════════════════════════════════════════════════════════╝
 
+  /// 🧪 调试用：重置引导状态并重新触发指定引导
+  Future<void> _debugResetAndShowGuide(GuideType type) async {
+    // 先移除已有的引导覆盖层
+    _guideOverlayEntry?.remove();
+    _guideOverlayEntry = null;
+
+    await _featureGuideService.resetAllGuides();
+    _hasCheckedRunningModeGuide = false;
+    _hasCheckedColorizeModeGuide = false;
+
+    if (!mounted) return;
+
+    if (type == GuideType.runningMode) {
+      // 先切到 Running Mode 页面
+      _modePageController.animateToPage(1,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (mounted) _showRunningModeGuide();
+    } else if (type == GuideType.colorizeMode) {
+      // 先切到 Colorize Mode 页面
+      _modePageController.animateToPage(2,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (mounted) _showColorizeModeGuide();
+    }
+  }
+
+  /// 🧪 调试用：构建引导触发按钮
+  Widget _buildDebugGuideButton(String label, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white70, size: 18),
+            const SizedBox(width: 8),
+            Text(label, style: const TextStyle(
+              color: Colors.white70, fontSize: 13,
+              decoration: TextDecoration.none,
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// 检查并显示 Running Mode 引导
   Future<void> _checkAndShowRunningModeGuide() async {
     if (_hasCheckedRunningModeGuide) return;
     _hasCheckedRunningModeGuide = true;
 
     final shouldShow = await _featureGuideService.shouldShowGuide(GuideType.runningMode);
-    if (shouldShow && mounted) {
+    if (!shouldShow) return;
+    if (mounted) {
       // 延迟一点显示引导，让界面先渲染完成
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
@@ -723,7 +821,8 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
     _hasCheckedColorizeModeGuide = true;
 
     final shouldShow = await _featureGuideService.shouldShowGuide(GuideType.colorizeMode);
-    if (shouldShow && mounted) {
+    if (!shouldShow) return;
+    if (mounted) {
       // 延迟一点显示引导，让界面先渲染完成
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
@@ -734,36 +833,77 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
   /// 显示 Running Mode 引导覆盖层
   void _showRunningModeGuide() {
-    // 由于 Running Mode 使用独立的 RunningModeWidget，
-    // 目标元素的 GlobalKey 在该组件内部，无法直接访问
-    // 因此使用简化的引导步骤，不高亮具体元素
     final steps = [
+      // Step 1: 点击下半部分进入调速界面
       GuideStep(
-        targetKey: GlobalKey(), // 占位 Key
-        title: '速度控制',
-        description: '上下滑动调节速度，数值会实时同步到设备',
-        icon: Icons.swap_vert,
-        position: TooltipPosition.bottom,
-      ),
-      GuideStep(
-        targetKey: GlobalKey(), // 占位 Key
-        title: '雾化器开关',
-        description: '点击汽车图片区域可切换雾化器开关状态',
+        targetKey: _lowerHalfKey,
+        title: '调速界面',
+        description: '点击进入调速界面',
         icon: Icons.touch_app,
-        position: TooltipPosition.bottom,
+        gestureType: GestureType.tap,
       ),
+      // Step 2: 上下滑动速度滚轮
       GuideStep(
-        targetKey: GlobalKey(), // 占位 Key
-        title: '模式切换',
-        description: '向左滑动可进入颜色调节模式',
-        icon: Icons.swipe,
-        position: TooltipPosition.bottom,
+        targetKey: _runningModeKeys['speedWheel'] ?? _lowerHalfKey,
+        title: '速度调节',
+        description: '上下滑动调节速度',
+        icon: Icons.swap_vert,
+        gestureType: GestureType.swipeDown,
+      ),
+      // Step 3: 点击单位标签切换
+      GuideStep(
+        targetKey: _runningModeKeys['unitLabel'] ?? _lowerHalfKey,
+        title: '单位切换',
+        description: '点击切换 km/h 和 mph',
+        icon: Icons.speed,
+        gestureType: GestureType.tap,
+      ),
+      // Step 4: 长按油门按钮
+      GuideStep(
+        targetKey: _runningModeKeys['throttleButton'] ?? _lowerHalfKey,
+        title: '油门加速',
+        description: '长按油门持续加速',
+        icon: Icons.rocket_launch,
+        gestureType: GestureType.longPress,
+      ),
+      // Step 5: 点击紧急停止
+      GuideStep(
+        targetKey: _runningModeKeys['emergencyStop'] ?? _lowerHalfKey,
+        title: '紧急停止',
+        description: '点击紧急停止归零',
+        icon: Icons.emergency,
+        gestureType: GestureType.tap,
+      ),
+      // Step 6: 点击汽车图片开关雾化器
+      GuideStep(
+        targetKey: _carImageKey,
+        title: '雾化器',
+        description: '点击开关雾化器',
+        icon: Icons.water_drop,
+        gestureType: GestureType.tap,
+      ),
+      // Step 7: 长按汽车图片关机或重启（仅展示信息，gestureType 为 tap）
+      GuideStep(
+        targetKey: _carImageKey,
+        title: '关机 / 重启',
+        description: '长按可关机或重启',
+        icon: Icons.power_settings_new,
+        gestureType: GestureType.tap,
+      ),
+      // Step 8: 向左滑动进入颜色模式
+      GuideStep(
+        targetKey: _lowerHalfKey,
+        title: '切换模式',
+        description: '向左滑动进入颜色模式',
+        icon: Icons.swipe_left,
+        gestureType: GestureType.swipeLeft,
       ),
     ];
 
-    _guideOverlayEntry = showGuideOverlay(
+    _guideOverlayEntry = showEnhancedGuideOverlay(
       context: context,
       steps: steps,
+      tooltipStyle: GuideTooltipStyle.glassmorphism,
       onComplete: () async {
         await _featureGuideService.markGuideComplete(GuideType.runningMode);
         _guideOverlayEntry = null;
@@ -780,32 +920,68 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
   /// 显示 Colorize Mode 引导覆盖层
   void _showColorizeModeGuide() {
     final steps = [
+      // Step 1: 左右滑动选择预设颜色
       GuideStep(
-        targetKey: GlobalKey(), // 占位 Key
+        targetKey: _colorCapsuleStripKey,
         title: '颜色预设',
-        description: '左右滑动选择预设颜色方案',
+        description: '左右滑动选择预设颜色',
         icon: Icons.swipe,
-        position: TooltipPosition.bottom,
+        gestureType: GestureType.swipeRight,
       ),
+      // Step 2: 点击开始颜色循环动画
       GuideStep(
-        targetKey: GlobalKey(), // 占位 Key
-        title: '详细调色',
-        description: '点击右下角调色盘按钮进入 RGB 详细调色模式',
-        icon: Icons.palette,
-        position: TooltipPosition.bottom,
-      ),
-      GuideStep(
-        targetKey: GlobalKey(), // 占位 Key
-        title: '开始涂色',
-        description: '点击底部区域开始/停止颜色循环动画',
+        targetKey: _startColoringButtonKey,
+        title: '颜色循环',
+        description: '点击开始颜色循环动画',
         icon: Icons.play_circle,
-        position: TooltipPosition.bottom,
+        gestureType: GestureType.tap,
+      ),
+      // Step 3: 点击进入 RGB 详细调色
+      GuideStep(
+        targetKey: _paletteButtonKey,
+        title: 'RGB 调色',
+        description: '点击进入 RGB 详细调色',
+        icon: Icons.palette,
+        gestureType: GestureType.tap,
+      ),
+      // Step 4: 点击选择灯带区域
+      GuideStep(
+        targetKey: _lmrbCapsulesKey,
+        title: '灯带区域',
+        description: '点击选择灯带区域',
+        icon: Icons.highlight,
+        gestureType: GestureType.tap,
+      ),
+      // Step 5: 长按打开详细调色面板
+      GuideStep(
+        targetKey: _lmrbCapsulesKey,
+        title: '详细调色',
+        description: '长按打开详细调色面板',
+        icon: Icons.color_lens,
+        gestureType: GestureType.longPress,
+      ),
+      // Step 6: 拖动调节颜色值
+      GuideStep(
+        targetKey: _rgbSlidersKey,
+        title: 'RGB 滑条',
+        description: '拖动调节颜色值',
+        icon: Icons.tune,
+        gestureType: GestureType.dragHorizontal,
+      ),
+      // Step 7: 上下拖动调节亮度
+      GuideStep(
+        targetKey: _brightnessBarKey,
+        title: '亮度调节',
+        description: '上下拖动调节亮度',
+        icon: Icons.wb_sunny,
+        gestureType: GestureType.dragVertical,
       ),
     ];
 
-    _guideOverlayEntry = showGuideOverlay(
+    _guideOverlayEntry = showEnhancedGuideOverlay(
       context: context,
       steps: steps,
+      tooltipStyle: GuideTooltipStyle.glowBorder,
       onComplete: () async {
         await _featureGuideService.markGuideComplete(GuideType.colorizeMode);
         _guideOverlayEntry = null;
@@ -833,6 +1009,10 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
     _presetReportSub?.cancel();
     _streamlightReportSub?.cancel(); // 🔄 取消流水灯订阅
     _airflowController.dispose(); // 🌫️ 释放雾化器控制器
+    // 🎨 RGB 数值输入清理
+    _rgbValueFocusNode.removeListener(_onRGBValueFocusChanged);
+    _rgbValueController.dispose();
+    _rgbValueFocusNode.dispose();
     // 📚 清理引导覆盖层
     _guideOverlayEntry?.remove();
     _guideOverlayEntry = null;
@@ -1189,7 +1369,10 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
       if (_colorizeState == ColorizeState.rgbDetail) {
         HapticFeedback.lightImpact();
         setState(() => _colorizeState = ColorizeState.preset);
-        _syncPresetToHardware(_selectedColorIndex);
+        // 仅在没有自定义颜色时才同步预设到硬件，避免覆盖用户自定义的 RGB 值
+        if (!_hasCustomColors) {
+          _syncPresetToHardware(_selectedColorIndex);
+        }
         return;
       }
     }
@@ -1362,6 +1545,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
         // ========== 🚗 汽车图片区域（单击雾化器、长按关机）==========
         Positioned(
+          key: _carImageKey,
           top: config.carImageTop,
           bottom: screenHeight - dividerPosition,
           left: config.carImageLeft,
@@ -1388,6 +1572,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
         // ========== 📄 下半部分内容区域（左右滑动切换模式）==========
         Positioned(
+          key: _lowerHalfKey,
           top: dividerPosition,
           left: 0,
           right: 0,
@@ -1408,6 +1593,47 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             ),
           ),
         ),
+
+        // ========== 📋 菜单按钮 ==========
+        if (!(_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail))
+
+        // ========== 🎨 传统色彩圆盘入口按钮（仅 RGB 调色模式显示）==========
+        if (_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail)
+          Positioned(
+            top: config.backButtonTop,
+            left: config.backButtonLeft + config.backButtonSize + 4,
+            child: GestureDetector(
+              onTap: _openChineseColorWheel,
+              child: Container(
+                width: config.backButtonSize,
+                height: config.backButtonSize,
+                alignment: Alignment.center,
+                child: Container(
+                  width: config.backButtonSize * 0.75,
+                  height: config.backButtonSize * 0.75,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white70, width: 2.0),
+                    gradient: const SweepGradient(
+                      colors: [
+                        Color(0xFFFF4500), // 朱砂红
+                        Color(0xFFE2C100), // 藤黄
+                        Color(0xFF2BAE66), // 竹绿
+                        Color(0xFF1661AB), // 石青
+                        Color(0xFF8B2671), // 紫棠
+                        Color(0xFFFF4500), // 回到起点
+                      ],
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.palette_outlined,
+                    color: Colors.white,
+                    size: config.backButtonSize * 0.35,
+                  ),
+                ),
+              ),
+            ),
+          ),
 
         // ========== 📋 菜单按钮 ==========
         if (!(_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail))
@@ -1456,6 +1682,26 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         // ========== 🎨 RGB 详细调节面板 ==========
         if (_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail && _showDetailedTuning)
           _buildDetailedTuningOverlay(config),
+
+        // ========== 🧪 调试：引导系统触发按钮（仅 Dev Test 页面可见）==========
+        if (_currentModeIndex == 0)
+          Positioned(
+            bottom: 40,
+            left: 16,
+            right: 16,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildDebugGuideButton('Running 引导', Icons.directions_car, () {
+                  _debugResetAndShowGuide(GuideType.runningMode);
+                }),
+                const SizedBox(width: 12),
+                _buildDebugGuideButton('Colorize 引导', Icons.palette, () {
+                  _debugResetAndShowGuide(GuideType.colorizeMode);
+                }),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -1704,6 +1950,48 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         // ========== 📋 菜单按钮（RGB详细调节时隐藏）==========
         if (!(_currentMode == ControlMode.colorize &&
             _colorizeState == ColorizeState.rgbDetail))
+
+        // ========== 🎨 传统色彩圆盘入口按钮（仅 RGB 调色模式显示）==========
+        if (_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail)
+          Positioned(
+            top: config.backButtonTop,
+            left: config.backButtonLeft + config.backButtonSize + 4,
+            child: GestureDetector(
+              onTap: _openChineseColorWheel,
+              child: Container(
+                width: config.backButtonSize,
+                height: config.backButtonSize,
+                alignment: Alignment.center,
+                child: Container(
+                  width: config.backButtonSize * 0.75,
+                  height: config.backButtonSize * 0.75,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white70, width: 2.0),
+                    gradient: const SweepGradient(
+                      colors: [
+                        Color(0xFFFF4500),
+                        Color(0xFFE2C100),
+                        Color(0xFF2BAE66),
+                        Color(0xFF1661AB),
+                        Color(0xFF8B2671),
+                        Color(0xFFFF4500),
+                      ],
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.palette_outlined,
+                    color: Colors.white,
+                    size: config.backButtonSize * 0.35,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // ========== 📋 菜单按钮（RGB详细调节时隐藏）==========
+        if (!(_currentMode == ControlMode.colorize &&
+            _colorizeState == ColorizeState.rgbDetail))
           Positioned(
             top: config.menuButtonTop,
             right: config.menuButtonRight,
@@ -1903,6 +2191,11 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         connectionStream: btProvider.connectionStream,
         isConnected: btProvider.isConnected,
         rawDataStream: btProvider.rawDataStream,
+        onKeysReady: (keys) {
+          setState(() {
+            _runningModeKeys = keys;
+          });
+        },
         onSpeedChanged: (speed) async {
           setState(() => _currentSpeed = speed);
           // 💾 保存速度值（仅在速度稳定时保存，避免频繁写入）
@@ -2055,7 +2348,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
               config.bottomButtonsMarginBottom +
               config.paletteButtonSize +
               20, // 为按钮区域留出空间
-          child: Center(child: _buildColorCapsulesLayer()),
+          child: Center(child: KeyedSubtree(key: _colorCapsuleStripKey, child: _buildColorCapsulesLayer())),
         ),
         // 底部：按钮区域（固定在底部）
         Positioned(
@@ -2086,6 +2379,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
                   },
                   behavior: HitTestBehavior.opaque,
                   child: Container(
+                    key: _startColoringButtonKey,
                     height: config.startColoringButtonTapHeight,
                     decoration: BoxDecoration(
                       color: _debugMode
@@ -2124,6 +2418,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
                 },
                 behavior: HitTestBehavior.opaque,
                 child: Container(
+                  key: _paletteButtonKey,
                   width: config.paletteButtonSize,
                   height: config.paletteButtonSize,
                   decoration: BoxDecoration(
@@ -2159,7 +2454,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(top: config._isSmallScreen ? 5 : 10),
-              child: Center(child: _buildRGBPositionCapsulesNew(config)),
+              child: Center(child: KeyedSubtree(key: _lmrbCapsulesKey, child: _buildRGBPositionCapsulesNew(config))),
             ),
           ),
           // 底部：循环速度控制面板
@@ -2204,14 +2499,14 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
           Positioned(
             top: config.verticalBrightnessTop,
             right: config.menuButtonRight,
-            child: _buildVerticalBrightnessSlider(config),
+            child: KeyedSubtree(key: _brightnessBarKey, child: _buildVerticalBrightnessSlider(config)),
           ),
 
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            child: _buildHighQualityRGBPanel(config),
+            child: KeyedSubtree(key: _rgbSlidersKey, child: _buildHighQualityRGBPanel(config)),
           ),
         ],
       ),
@@ -2375,14 +2670,47 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          Text(
-            posName!,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2.0,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // 🎨 传统色彩圆盘入口按钮
+              GestureDetector(
+                onTap: _openChineseColorWheel,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white70, width: 1.5),
+                    gradient: const SweepGradient(
+                      colors: [
+                        Color(0xFFFF4500),
+                        Color(0xFFE2C100),
+                        Color(0xFF2BAE66),
+                        Color(0xFF1661AB),
+                        Color(0xFF8B2671),
+                        Color(0xFFFF4500),
+                      ],
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.palette_outlined,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+              Text(
+                posName!,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2.0,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 40),
           _buildMetallicColorSlider(
@@ -2393,6 +2721,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             (val) {
               setState(() => _redValues[currentPos] = val.toInt());
               _syncLEDColor();
+              _markCustomColors();
             },
           ),
           const SizedBox(height: 15),
@@ -2404,6 +2733,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             (val) {
               setState(() => _greenValues[currentPos] = val.toInt());
               _syncLEDColor();
+              _markCustomColors();
             },
           ),
           const SizedBox(height: 15),
@@ -2415,6 +2745,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             (val) {
               setState(() => _blueValues[currentPos] = val.toInt());
               _syncLEDColor();
+              _markCustomColors();
             },
           ),
         ],
@@ -2455,17 +2786,44 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.white10),
+                border: Border.all(color: _editingRGBChannel == label ? Colors.white30 : Colors.white10),
               ),
-              child: Text(
-                value.toString().padLeft(3, '0'),
-                style: TextStyle(
-                  color: color.withValues(alpha: 0.8),
-                  fontFamily: 'monospace',
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: _editingRGBChannel == label
+                  ? SizedBox(
+                      width: 48,
+                      height: 22,
+                      child: TextField(
+                        controller: _rgbValueController,
+                        focusNode: _rgbValueFocusNode,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: color.withValues(alpha: 0.8),
+                          fontFamily: 'monospace',
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (_) => _commitRGBValueEdit(),
+                      ),
+                    )
+                  : GestureDetector(
+                      onTap: () => _startRGBValueEdit(label, value),
+                      child: Text(
+                        value.toString().padLeft(3, '0'),
+                        style: TextStyle(
+                          color: color.withValues(alpha: 0.8),
+                          fontFamily: 'monospace',
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -2887,6 +3245,10 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
       return;
     }
 
+    // 用户主动选择预设时，清除自定义颜色标志和持久化数据
+    _hasCustomColors = false;
+    _preferenceService.clearCustomRGBColors();
+
     final btProvider = Provider.of<BluetoothProvider>(context, listen: false);
 
     _applyPresetToLocalColors(index);
@@ -2934,6 +3296,85 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         _blueValues['B'] = led3['b']!;
       });
     }
+  }
+
+  /// 🎨 打开中华传统色彩圆盘
+  void _openChineseColorWheel() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ChineseColorWheelOverlay(
+          onColorSelected: (r, g, b) {
+            final pos = _selectedLightPosition;
+            setState(() {
+              _redValues[pos] = r;
+              _greenValues[pos] = g;
+              _blueValues[pos] = b;
+            });
+            _syncLEDColor();
+            _markCustomColors();
+          },
+        ),
+      ),
+    );
+  }
+
+  /// 🎨 RGB 数值输入：焦点变化回调
+  void _onRGBValueFocusChanged() {
+    if (!_rgbValueFocusNode.hasFocus && _editingRGBChannel != null) {
+      _commitRGBValueEdit();
+    }
+  }
+
+  /// 🎨 RGB 数值输入：开始编辑
+  void _startRGBValueEdit(String channel, int currentValue) {
+    setState(() {
+      _editingRGBChannel = channel;
+      _rgbValueController.text = currentValue.toString();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rgbValueFocusNode.requestFocus();
+      _rgbValueController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _rgbValueController.text.length,
+      );
+    });
+  }
+
+  /// 🎨 RGB 数值输入：提交编辑
+  void _commitRGBValueEdit() {
+    if (_editingRGBChannel == null) return;
+    final channel = _editingRGBChannel!;
+    final pos = _selectedLightPosition;
+    final text = _rgbValueController.text;
+    
+    if (text.isNotEmpty) {
+      final parsed = int.tryParse(text) ?? 0;
+      final clamped = parsed.clamp(0, 255);
+      setState(() {
+        switch (channel) {
+          case 'R': _redValues[pos] = clamped; break;
+          case 'G': _greenValues[pos] = clamped; break;
+          case 'B': _blueValues[pos] = clamped; break;
+        }
+        _editingRGBChannel = null;
+      });
+      _syncLEDColor();
+      _markCustomColors();
+    } else {
+      setState(() => _editingRGBChannel = null);
+    }
+  }
+
+  /// 标记当前颜色为自定义颜色，并持久化保存
+  void _markCustomColors() {
+    _hasCustomColors = true;
+    _preferenceService.saveHasCustomColors(true);
+    _preferenceService.saveCustomRGBColors({
+      'L': {'r': _redValues['L']!, 'g': _greenValues['L']!, 'b': _blueValues['L']!},
+      'M': {'r': _redValues['M']!, 'g': _greenValues['M']!, 'b': _blueValues['M']!},
+      'R': {'r': _redValues['R']!, 'g': _greenValues['R']!, 'b': _blueValues['R']!},
+      'B': {'r': _redValues['B']!, 'g': _greenValues['B']!, 'b': _blueValues['B']!},
+    });
   }
 
   void _syncBrightness() async {

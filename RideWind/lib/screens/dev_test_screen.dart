@@ -1,30 +1,30 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../utils/euler_fluid_simulator.dart';
 
-/// 单股烟雾流的状态
-class _SmokeStream {
-  final double y;          // 固定 Y 位置（屏幕像素）
-  double headX;            // 烟雾前端 X 位置
-  double noiseOffset;      // Noise 偏移，让每股有微小波动
-  final double speed;      // 水平推进速度
-  final double thickness;  // 线条粗细
+/// 烟雾粒子：沿速度场移动的点
+class _SmokeParticle {
+  double x; // 网格坐标
+  double y;
+  double age; // 0.0 ~ 1.0，1.0 = 刚生成
+  final int streamIndex; // 属于哪条射流
 
-  _SmokeStream({
+  _SmokeParticle({
+    required this.x,
     required this.y,
-    required this.speed,
-    required this.thickness,
-    this.headX = 0,
-    this.noiseOffset = 0,
+    required this.streamIndex,
+    this.age = 1.0,
   });
 }
 
-/// 烟雾射流绘制器 - 5 条笔直连续的烟雾线
-class _SmokeStreamPainter extends CustomPainter {
-  final List<_SmokeStream> streams;
-  final int tick;
+/// 5条独立烟雾射流的粒子轨迹渲染器
+class SmokeTrailPainter extends CustomPainter {
+  final List<List<_SmokeParticle>> streams;
+  final int gridSize;
 
-  _SmokeStreamPainter({required this.streams, required this.tick});
+  SmokeTrailPainter({required this.streams, required this.gridSize});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -34,79 +34,65 @@ class _SmokeStreamPainter extends CustomPainter {
       Paint()..color = const Color(0xFF000000),
     );
 
+    final scaleX = size.width / gridSize;
+    final scaleY = size.height / gridSize;
+
     for (final stream in streams) {
-      _drawStream(canvas, size, stream);
+      if (stream.length < 2) continue;
+
+      // 按 x 坐标排序（从左到右），确保路径连续
+      final sorted = List<_SmokeParticle>.from(stream)
+        ..sort((a, b) => a.x.compareTo(b.x));
+
+      // 多层渲染：宽模糊层 + 窄亮层
+      _drawStreamLayer(canvas, sorted, scaleX, scaleY, 6.0, 0.15); // 宽层
+      _drawStreamLayer(canvas, sorted, scaleX, scaleY, 3.0, 0.4);  // 中层
+      _drawStreamLayer(canvas, sorted, scaleX, scaleY, 1.2, 0.7);  // 窄亮层
     }
   }
 
-  void _drawStream(Canvas canvas, Size size, _SmokeStream stream) {
-    final double endX = stream.headX.clamp(0.0, size.width);
-    if (endX <= 0) return;
+  void _drawStreamLayer(
+    Canvas canvas,
+    List<_SmokeParticle> particles,
+    double scaleX,
+    double scaleY,
+    double strokeWidth,
+    double baseAlpha,
+  ) {
+    if (particles.length < 2) return;
 
-    // 构建路径：从左边缘到 headX，带微小垂直波动
     final path = Path();
-    path.moveTo(0, stream.y);
+    path.moveTo(particles[0].x * scaleX, particles[0].y * scaleY);
 
-    // 每 20 像素一个控制点，加入极小的正弦波动让烟雾有生命感
-    const double segLen = 20.0;
-    final int segments = (endX / segLen).ceil();
-    for (int i = 1; i <= segments; i++) {
-      final double x = (i * segLen).clamp(0.0, endX);
-      // 微小的垂直波动（±2像素），随时间缓慢变化
-      final double wave = sin(x * 0.02 + stream.noiseOffset + tick * 0.03) * 2.0;
-      path.lineTo(x, stream.y + wave);
+    for (int i = 1; i < particles.length; i++) {
+      final p = particles[i];
+      path.lineTo(p.x * scaleX, p.y * scaleY);
     }
 
-    // 第1层：外层大范围发光
-    final glowPaint = Paint()
-      ..color = const Color(0xFFc0c0d8).withValues(alpha: 0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stream.thickness * 4.5
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, stream.thickness * 2.5);
-    canvas.drawPath(path, glowPaint);
+    // 根据粒子平均 age 调整透明度
+    final avgAge = particles.fold<double>(0, (s, p) => s + p.age) / particles.length;
+    final alpha = (baseAlpha * avgAge).clamp(0.0, 1.0);
 
-    // 第2层：中层主体
-    final bodyPaint = Paint()
-      ..color = const Color(0xFFd0d0e0).withValues(alpha: 0.55)
+    final paint = Paint()
+      ..color = Color.fromRGBO(210, 215, 240, alpha)
+      ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stream.thickness * 2.5
       ..strokeCap = StrokeCap.round
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, stream.thickness * 1.2);
-    canvas.drawPath(path, bodyPaint);
+      ..strokeJoin = StrokeJoin.round;
 
-    // 第3层：内层亮核
-    final corePaint = Paint()
-      ..color = const Color(0xFFe8e8ff).withValues(alpha: 0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stream.thickness * 1.2
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, stream.thickness * 0.5);
-    canvas.drawPath(path, corePaint);
-
-    // 烟雾前端：渐隐效果（在最后 60 像素逐渐变淡）
-    if (endX > 60) {
-      final fadeStart = endX - 60;
-      final fadePaint = Paint()
-        ..color = const Color(0xFF000000)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stream.thickness * 5.0
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 35);
-      // 在尾端画一小段黑色模糊来柔化边缘
-      final fadePath = Path()
-        ..moveTo(endX - 10, stream.y)
-        ..lineTo(endX + 20, stream.y);
-      canvas.drawPath(fadePath, fadePaint);
+    // 模糊效果
+    if (strokeWidth > 2.0) {
+      paint.maskFilter = MaskFilter.blur(BlurStyle.normal, strokeWidth * 0.5);
     }
+
+    canvas.drawPath(path, paint);
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-
-/// 🧪 开发测试界面 - 5股笔直烟雾射流
+/// 🧪 开发测试界面 - 5股烟雾射流（粒子轨迹 + 速度场驱动）
 class DevTestScreen extends StatefulWidget {
   final bool isVisible;
   const DevTestScreen({super.key, this.isVisible = true});
@@ -116,20 +102,49 @@ class DevTestScreen extends StatefulWidget {
 }
 
 class _DevTestScreenState extends State<DevTestScreen> {
+  late EulerFluidSimulator _simulator;
   Timer? _timer;
-  final List<_SmokeStream> _streams = [];
-  int _tick = 0;
-  bool _initialized = false;
+  final Random _random = Random();
 
-  // 触摸交互
-  Offset? _lastTouchPos;
+  // 5条射流的粒子列表
+  late List<List<_SmokeParticle>> _streams;
+
+  // 5个喷嘴的 Y 坐标（网格坐标）
+  late List<double> _nozzleYPositions;
+
+  static const int gridSize = 80;
+  static const int maxParticlesPerStream = 120;
+  static const double ageDecay = 0.012; // 每帧衰减
 
   @override
   void initState() {
     super.initState();
-    if (widget.isVisible) {
-      _startSimulation();
-    }
+    _simulator = EulerFluidSimulator(
+      gridWidth: gridSize,
+      gridHeight: gridSize,
+      dt: 0.1,
+      diffusion: 0.0,
+      viscosity: 0.00001,
+      iterations: 4,
+      vorticityStrength: 0.1,
+      decayRate: 0.99,
+      velocityDecay: 0.995,
+      densityThreshold: 0.005,
+      gravityStrength: 0.06,
+      boundaryLayerDecay: 0.92,
+      boundaryLayerThickness: 3,
+      suctionStrength: 0.3,
+      suctionWidth: 4,
+    );
+
+    // 5个喷嘴均匀分布在 10%~90% 高度
+    _nozzleYPositions = List.generate(5, (i) {
+      return gridSize * (0.1 + 0.8 * i / 4);
+    });
+
+    _streams = List.generate(5, (_) => <_SmokeParticle>[]);
+
+    if (widget.isVisible) _startSimulation();
   }
 
   @override
@@ -150,39 +165,86 @@ class _DevTestScreenState extends State<DevTestScreen> {
     super.dispose();
   }
 
-  void _initStreams(double screenHeight) {
-    if (_initialized) return;
-    _initialized = true;
-    final random = Random();
-
-    // 5 股烟雾，均匀分布在屏幕高度 12%~88%
+  void _stepSimulation() {
+    // 1. 在喷嘴处注入速度（驱动速度场）
     for (int i = 0; i < 5; i++) {
-      final y = screenHeight * (0.12 + 0.76 * i / 4);
-      _streams.add(_SmokeStream(
-        y: y,
-        speed: 4.0 + random.nextDouble() * 2.0, // 每股速度略有差异
-        thickness: 12.0 + random.nextDouble() * 5.0, // 更粗的烟雾
-        headX: 0,
-        noiseOffset: random.nextDouble() * 6.28, // 随机相位
-      ));
+      final ny = _nozzleYPositions[i].round();
+      for (int x = 1; x <= 3; x++) {
+        final vx = 2.5 + _random.nextDouble() * 1.5;
+        final vy = (_random.nextDouble() - 0.5) * 0.3;
+        _simulator.addVelocity(x, ny, vx, vy);
+      }
+    }
+
+    // 2. 推进速度场
+    _simulator.step();
+
+    // 3. 每条射流生成新粒子
+    for (int i = 0; i < 5; i++) {
+      final ny = _nozzleYPositions[i];
+      // 每帧生成2个粒子，带微小Y扰动
+      for (int k = 0; k < 2; k++) {
+        _streams[i].add(_SmokeParticle(
+          x: 1.0 + _random.nextDouble() * 0.5,
+          y: ny + (_random.nextDouble() - 0.5) * 0.8,
+          streamIndex: i,
+        ));
+      }
+    }
+
+    // 4. 移动所有粒子：沿速度场采样
+    for (final stream in _streams) {
+      for (final p in stream) {
+        // 双线性插值采样速度场
+        final gx = p.x.clamp(0.0, gridSize - 1.01);
+        final gy = p.y.clamp(0.0, gridSize - 1.01);
+        final ix = gx.floor().clamp(0, gridSize - 2);
+        final iy = gy.floor().clamp(0, gridSize - 2);
+        final fx = gx - ix;
+        final fy = gy - iy;
+
+        final (u00, v00) = _simulator.getVelocity(ix, iy);
+        final (u10, v10) = _simulator.getVelocity(ix + 1, iy);
+        final (u01, v01) = _simulator.getVelocity(ix, iy + 1);
+        final (u11, v11) = _simulator.getVelocity(ix + 1, iy + 1);
+
+        final u = u00 * (1 - fx) * (1 - fy) +
+            u10 * fx * (1 - fy) +
+            u01 * (1 - fx) * fy +
+            u11 * fx * fy;
+        final v = v00 * (1 - fx) * (1 - fy) +
+            v10 * fx * (1 - fy) +
+            v01 * (1 - fx) * fy +
+            v11 * fx * fy;
+
+        // 移动粒子
+        p.x += u * 0.15;
+        p.y += v * 0.15;
+
+        // 衰减
+        p.age -= ageDecay;
+      }
+    }
+
+    // 5. 清理死亡/出界粒子，限制数量
+    for (int i = 0; i < 5; i++) {
+      _streams[i].removeWhere((p) =>
+          p.age <= 0 ||
+          p.x < 0 ||
+          p.x >= gridSize ||
+          p.y < 0 ||
+          p.y >= gridSize);
+      // 限制最大粒子数
+      if (_streams[i].length > maxParticlesPerStream) {
+        _streams[i].removeRange(0, _streams[i].length - maxParticlesPerStream);
+      }
     }
   }
 
   void _startSimulation() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(milliseconds: 16), (_) {
-      _tick++;
-      final screenW = _lastKnownWidth ?? 500;
-
-      for (final stream in _streams) {
-        // 烟雾前端向右推进
-        if (stream.headX < screenW + 30) {
-          stream.headX += stream.speed;
-        }
-        // 更新 noise 偏移让波动持续变化
-        stream.noiseOffset += 0.01;
-      }
-
+      _stepSimulation();
       if (mounted) setState(() {});
     });
   }
@@ -192,8 +254,22 @@ class _DevTestScreenState extends State<DevTestScreen> {
     _timer = null;
   }
 
-  double? _lastKnownWidth;
-  double? _lastKnownHeight;
+  void _handlePanUpdate(DragUpdateDetails details, Size size) {
+    final gridX = (details.localPosition.dx / size.width * gridSize)
+        .round()
+        .clamp(0, gridSize - 1);
+    final gridY = (details.localPosition.dy / size.height * gridSize)
+        .round()
+        .clamp(0, gridSize - 1);
+
+    final vx = details.delta.dx * 0.5;
+    final vy = details.delta.dy * 0.5;
+    for (int dx = -2; dx <= 2; dx++) {
+      for (int dy = -2; dy <= 2; dy++) {
+        _simulator.addVelocity(gridX + dx, gridY + dy, vx, vy);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -201,20 +277,14 @@ class _DevTestScreenState extends State<DevTestScreen> {
       color: Colors.black,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          _lastKnownWidth = constraints.biggest.width;
-          _lastKnownHeight = constraints.biggest.height;
-          _initStreams(constraints.biggest.height);
           return GestureDetector(
-            onPanUpdate: (details) {
-              // 触摸交互：扰动最近的烟雾流
-              _lastTouchPos = details.localPosition;
-            },
-            onPanEnd: (_) => _lastTouchPos = null,
+            onPanUpdate: (details) =>
+                _handlePanUpdate(details, constraints.biggest),
             child: CustomPaint(
               size: constraints.biggest,
-              painter: _SmokeStreamPainter(
+              painter: SmokeTrailPainter(
                 streams: _streams,
-                tick: _tick,
+                gridSize: gridSize,
               ),
             ),
           );

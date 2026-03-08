@@ -35,6 +35,17 @@ class EulerFluidSimulator {
   // 迭代次数（用于求解泊松方程）
   final int iterations;
 
+  // 重力场强度
+  final double gravityStrength;
+
+  // 粘性边界层参数
+  double boundaryLayerDecay;
+  int boundaryLayerThickness;
+
+  // 右侧抽气风场参数
+  double suctionStrength;
+  int suctionWidth;
+
   // 湍流相关
   int _frameCount = 0;
   final Random _random = Random();
@@ -50,6 +61,11 @@ class EulerFluidSimulator {
     this.decayRate = 0.99,
     this.velocityDecay = 0.998,
     this.densityThreshold = 0.005,
+    this.gravityStrength = 0.05,
+    this.boundaryLayerDecay = 0.9,
+    this.boundaryLayerThickness = 3,
+    this.suctionStrength = 1.5,
+    this.suctionWidth = 3,
   }) {
     final size = gridWidth * gridHeight;
     _u = Float64List(size);
@@ -89,25 +105,40 @@ class EulerFluidSimulator {
     // 1. 速度场扩散
     _diffuse(1, _uPrev, _u, viscosity);
     _diffuse(2, _vPrev, _v, viscosity);
+
+    // 2. 投影（扩散后）
     _project(_uPrev, _vPrev, _u, _v);
 
-    // 2. 速度场平流
+    // 3. 速度场平流
     _advect(1, _u, _uPrev, _uPrev, _vPrev);
     _advect(2, _v, _vPrev, _uPrev, _vPrev);
+
+    // 4. 投影（平流后）
     _project(_u, _v, _uPrev, _vPrev);
 
-    // 3. 涡度约束
+    // 5. 涡度约束
     _applyVorticityConfinement();
 
-    // 4. 湍流扰动
+    // 6. 湍流扰动
     _applyTurbulence();
 
-    // 5. 密度场演化
+    // 7. 重力场
+    _applyGravity();
+
+    // 8. 右侧抽气风场
+    _applySuctionWind();
+
+    // 9. 粘性边界层
+    _applyBoundaryLayer();
+
+    // 10. 密度场演化
     _diffuse(0, _densityPrev, _density, diffusion);
     _advect(0, _density, _densityPrev, _u, _v);
 
-    // 6. 衰减与清理
+    // 11. 衰减
     _applyDecay();
+
+    // 12. 清理低密度
     _cleanupLowDensity();
   }
 
@@ -215,14 +246,24 @@ class EulerFluidSimulator {
 
   /// 设置边界条件
   void _setBoundary(int b, Float64List x) {
-    // 上下边界
+    // 上下边界：无滑移壁面
     for (int i = 1; i < gridWidth - 1; i++) {
-      x[_idx(i, 0)] = b == 2 ? -x[_idx(i, 1)] : x[_idx(i, 1)];
-      x[_idx(i, gridHeight - 1)] =
-          b == 2 ? -x[_idx(i, gridHeight - 2)] : x[_idx(i, gridHeight - 2)];
+      if (b == 1) {
+        // u 分量：壁面处归零（无滑移）
+        x[_idx(i, 0)] = 0;
+        x[_idx(i, gridHeight - 1)] = 0;
+      } else if (b == 2) {
+        // v 分量：壁面处取反（反射）
+        x[_idx(i, 0)] = -x[_idx(i, 1)];
+        x[_idx(i, gridHeight - 1)] = -x[_idx(i, gridHeight - 2)];
+      } else {
+        // 密度等标量：Neumann 条件
+        x[_idx(i, 0)] = x[_idx(i, 1)];
+        x[_idx(i, gridHeight - 1)] = x[_idx(i, gridHeight - 2)];
+      }
     }
 
-    // 左右边界（Neumann 开放边界条件：复制相邻内部单元值）
+    // 左右边界：开放 Neumann 条件（保持不变）
     for (int j = 1; j < gridHeight - 1; j++) {
       x[_idx(0, j)] = x[_idx(1, j)];
       x[_idx(gridWidth - 1, j)] = x[_idx(gridWidth - 2, j)];
@@ -239,17 +280,57 @@ class EulerFluidSimulator {
             x[_idx(gridWidth - 1, gridHeight - 2)]);
   }
 
-  /// 湍流扰动：基于帧计数的时变随机扰动
+  /// 湍流扰动：仅在有密度的区域施加随机扰动
   void _applyTurbulence() {
-    final amplitude = 0.05 * (0.8 + 0.2 * sin(_frameCount * 0.1));
+    final amplitude = 0.03 * (0.8 + 0.2 * sin(_frameCount * 0.1));
     for (int j = 1; j < gridHeight - 1; j++) {
       for (int i = 1; i < gridWidth - 1; i++) {
         final idx = _idx(i, j);
+        if (_density[idx] < densityThreshold) continue;
         _u[idx] += amplitude * (_random.nextDouble() - 0.5);
         _v[idx] += amplitude * (_random.nextDouble() - 0.5);
       }
     }
     _frameCount++;
+  }
+
+  /// 重力场：对所有内部网格施加向下速度（物理场，与密度无关）
+  void _applyGravity() {
+    for (int j = 1; j < gridHeight - 1; j++) {
+      for (int i = 1; i < gridWidth - 1; i++) {
+        _v[_idx(i, j)] += gravityStrength * dt;
+      }
+    }
+  }
+
+  /// 右侧抽气风场：距右边界 1~suctionWidth 个网格内，对 u 施加正向增量
+  void _applySuctionWind() {
+    for (int j = 1; j < gridHeight - 1; j++) {
+      for (int layer = 1; layer <= suctionWidth; layer++) {
+        final x = gridWidth - 1 - layer;
+        if (x > 0) {
+          _u[_idx(x, j)] += suctionStrength * dt;
+        }
+      }
+    }
+  }
+
+  /// 粘性边界层：距上下壁面 1~boundaryLayerThickness 个网格内，对速度施加递进衰减
+  void _applyBoundaryLayer() {
+    for (int i = 0; i < gridWidth; i++) {
+      for (int layer = 1; layer <= boundaryLayerThickness; layer++) {
+        final decay = boundaryLayerDecay +
+            (1.0 - boundaryLayerDecay) * (layer / (boundaryLayerThickness + 1));
+        // 上壁面附近
+        final topIdx = _idx(i, layer);
+        _u[topIdx] *= decay;
+        _v[topIdx] *= decay;
+        // 下壁面附近
+        final bottomIdx = _idx(i, gridHeight - 1 - layer);
+        _u[bottomIdx] *= decay;
+        _v[bottomIdx] *= decay;
+      }
+    }
   }
 
   /// 衰减：对密度场和速度场施加逐帧衰减

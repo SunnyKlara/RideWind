@@ -165,6 +165,9 @@ class RunningModeWidget extends StatefulWidget {
   // 🐛 原始数据流（用于调试）
   final Stream<String>? rawDataStream;
 
+  // 🎯 引导系统：GlobalKey 暴露回调
+  final Function(Map<String, GlobalKey> keys)? onKeysReady;
+
   const RunningModeWidget({
     super.key,
     this.initialSpeed = 0, // ✅ 现在可以正确初始化了
@@ -182,6 +185,7 @@ class RunningModeWidget extends StatefulWidget {
     this.connectionStream, // 🔗 连接状态流
     this.isConnected = true, // 🔗 初始连接状态
     this.rawDataStream, // 🐛 原始数据流
+    this.onKeysReady, // 🎯 引导系统回调
   });
 
   @override
@@ -190,6 +194,12 @@ class RunningModeWidget extends StatefulWidget {
 
 class _RunningModeWidgetState extends State<RunningModeWidget>
     with TickerProviderStateMixin {
+  // 🎯 引导系统 GlobalKey
+  final GlobalKey _speedWheelKey = GlobalKey(debugLabel: 'speedWheel');
+  final GlobalKey _unitLabelKey = GlobalKey(debugLabel: 'unitLabel');
+  final GlobalKey _throttleButtonKey = GlobalKey(debugLabel: 'throttleButton');
+  final GlobalKey _emergencyStopKey = GlobalKey(debugLabel: 'emergencyStop');
+
   // ========== 状态变量 ==========
   late bool _showSpeedControl; // 🔑 改为 late，在 initState 中初始化
   late int _currentSpeed;
@@ -287,6 +297,16 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
     _subscribeToExternalUnitStream(); // 📏 订阅外部单位流
     _subscribeToConnectionStream();
     _subscribeToRawDataStream(); // 🐛 订阅原始数据流
+
+    // 🎯 引导系统：在首帧渲染后将 GlobalKey 传递给父组件
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onKeysReady?.call({
+        'speedWheel': _speedWheelKey,
+        'unitLabel': _unitLabelKey,
+        'throttleButton': _throttleButtonKey,
+        'emergencyStop': _emergencyStopKey,
+      });
+    });
   }
 
   /// 🐛 订阅原始数据流（用于调试）
@@ -666,6 +686,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
             left: config.emergencyStopLeft,
             right: config.emergencyStopRight,
             child: GestureDetector(
+              key: _emergencyStopKey,
               behavior: HitTestBehavior.opaque, // ✅ 阻止事件穿透到覆盖层
               onTap: () {
                 debugPrint('🚨 紧急停止！速度急速滚动至零（保持调速界面开启）');
@@ -727,6 +748,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
             bottom: config.quickArrowBottom,
             right: config.quickArrowRight,
             child: GestureDetector(
+              key: _throttleButtonKey,
               behavior: HitTestBehavior.opaque,
               // ✅ 添加 onTap 处理，阻止事件穿透到下层覆盖层
               onTap: () {
@@ -911,6 +933,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
         
         // ========== 主滚轮区域 ==========
         Positioned(
+          key: _speedWheelKey,
           top: 0,
           left: 0,
           right: 0,
@@ -1138,6 +1161,7 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
                       // 单位部分（仅选中显示，紧跟在数字后）
                       if (isCurrent)
                         Padding(
+                          key: _unitLabelKey,
                           padding: const EdgeInsets.only(left: 10.0),
                           child: RichText(
                             text: TextSpan(

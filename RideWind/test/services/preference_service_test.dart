@@ -748,5 +748,180 @@ void main() {
         expect(retrieved['list'], [1, 2, 3]);
       });
     });
+
+    // ============================================================
+    // Custom RGB Colors Persistence
+    // Feature: app-ux-and-color-bug-fix, Task 1.1
+    // ============================================================
+
+    group('Custom RGB Colors Persistence', () {
+      /// **Validates: Requirements 4.1, 4.4**
+      /// 测试自定义 RGB 颜色的基本 round-trip
+      test('round-trip: saveCustomRGBColors then getCustomRGBColors returns same data', () async {
+        final service = PreferenceService();
+
+        final zoneColors = <String, Map<String, int>>{
+          'L': {'r': 255, 'g': 128, 'b': 0},
+          'M': {'r': 100, 'g': 200, 'b': 50},
+          'R': {'r': 0, 'g': 0, 'b': 255},
+          'B': {'r': 10, 'g': 20, 'b': 30},
+        };
+
+        await service.saveCustomRGBColors(zoneColors);
+        final retrieved = await service.getCustomRGBColors();
+
+        expect(retrieved, isNotNull);
+        expect(retrieved, equals(zoneColors));
+      });
+
+      /// **Validates: Requirements 4.1, 4.4**
+      /// 测试边界 RGB 值 (0 和 255)
+      test('round-trip: boundary RGB values 0 and 255', () async {
+        final service = PreferenceService();
+
+        final zoneColors = <String, Map<String, int>>{
+          'L': {'r': 0, 'g': 0, 'b': 0},
+          'M': {'r': 255, 'g': 255, 'b': 255},
+          'R': {'r': 0, 'g': 255, 'b': 0},
+          'B': {'r': 255, 'g': 0, 'b': 255},
+        };
+
+        await service.saveCustomRGBColors(zoneColors);
+        final retrieved = await service.getCustomRGBColors();
+
+        expect(retrieved, isNotNull);
+        expect(retrieved, equals(zoneColors));
+      });
+
+      /// **Validates: Requirements 4.3**
+      /// 测试 clearCustomRGBColors 清除颜色数据和标志位
+      test('clearCustomRGBColors removes color data and flag', () async {
+        final service = PreferenceService();
+
+        final zoneColors = <String, Map<String, int>>{
+          'L': {'r': 100, 'g': 100, 'b': 100},
+        };
+
+        await service.saveCustomRGBColors(zoneColors);
+        await service.saveHasCustomColors(true);
+
+        // Verify saved
+        expect(await service.getCustomRGBColors(), isNotNull);
+        expect(await service.getHasCustomColors(), true);
+
+        // Clear
+        await service.clearCustomRGBColors();
+
+        // Verify cleared
+        expect(await service.getCustomRGBColors(), isNull);
+        expect(await service.getHasCustomColors(), false);
+      });
+
+      /// **Validates: Requirements 4.1**
+      /// 测试 getCustomRGBColors 在无数据时返回 null
+      test('getCustomRGBColors returns null when no data saved', () async {
+        final service = PreferenceService();
+        final result = await service.getCustomRGBColors();
+        expect(result, isNull);
+      });
+
+      /// 测试 clamp(0, 255) 约束 RGB 值
+      test('getCustomRGBColors clamps RGB values to 0-255 range', () async {
+        // Manually set corrupted data with out-of-range values
+        SharedPreferences.setMockInitialValues({
+          'custom_rgb_colors': '{"L":{"r":300,"g":-10,"b":128},"M":{"r":256,"g":0,"b":999}}',
+        });
+
+        final service = PreferenceService();
+        final retrieved = await service.getCustomRGBColors();
+
+        expect(retrieved, isNotNull);
+        expect(retrieved!['L']!['r'], 255); // 300 clamped to 255
+        expect(retrieved['L']!['g'], 0);    // -10 clamped to 0
+        expect(retrieved['L']!['b'], 128);  // 128 unchanged
+        expect(retrieved['M']!['r'], 255);  // 256 clamped to 255
+        expect(retrieved['M']!['g'], 0);    // 0 unchanged
+        expect(retrieved['M']!['b'], 255);  // 999 clamped to 255
+      });
+
+      /// 测试损坏的 JSON 数据返回 null
+      test('getCustomRGBColors returns null for corrupted JSON data', () async {
+        SharedPreferences.setMockInitialValues({
+          'custom_rgb_colors': 'not_valid_json',
+        });
+
+        final service = PreferenceService();
+        final result = await service.getCustomRGBColors();
+        expect(result, isNull);
+      });
+
+      /// 测试覆盖写入正确更新
+      test('overwriting custom RGB colors updates stored data', () async {
+        final service = PreferenceService();
+
+        final initial = <String, Map<String, int>>{
+          'L': {'r': 10, 'g': 20, 'b': 30},
+        };
+        await service.saveCustomRGBColors(initial);
+
+        final updated = <String, Map<String, int>>{
+          'L': {'r': 200, 'g': 100, 'b': 50},
+          'R': {'r': 0, 'g': 255, 'b': 128},
+        };
+        await service.saveCustomRGBColors(updated);
+
+        final retrieved = await service.getCustomRGBColors();
+        expect(retrieved, equals(updated));
+      });
+
+      /// 测试 reset 也清除自定义颜色数据
+      test('reset clears custom RGB colors and flag', () async {
+        final service = PreferenceService();
+
+        await service.saveCustomRGBColors({
+          'L': {'r': 1, 'g': 2, 'b': 3},
+        });
+        await service.saveHasCustomColors(true);
+
+        await service.reset();
+
+        expect(await service.getCustomRGBColors(), isNull);
+        expect(await service.getHasCustomColors(), false);
+      });
+    });
+
+    // ============================================================
+    // Has Custom Colors Flag
+    // Feature: app-ux-and-color-bug-fix, Task 1.1
+    // ============================================================
+
+    group('Has Custom Colors Flag', () {
+      /// **Validates: Requirements 3.4**
+      /// 测试颜色来源标志位 round-trip
+      test('round-trip: saveHasCustomColors then getHasCustomColors', () async {
+        final service = PreferenceService();
+
+        await service.saveHasCustomColors(true);
+        expect(await service.getHasCustomColors(), true);
+
+        await service.saveHasCustomColors(false);
+        expect(await service.getHasCustomColors(), false);
+      });
+
+      /// 测试默认值为 false
+      test('getHasCustomColors returns false by default', () async {
+        final service = PreferenceService();
+        expect(await service.getHasCustomColors(), false);
+      });
+
+      /// 测试不同实例共享标志位状态
+      test('different instances share hasCustomColors flag', () async {
+        final service1 = PreferenceService();
+        final service2 = PreferenceService();
+
+        await service1.saveHasCustomColors(true);
+        expect(await service2.getHasCustomColors(), true);
+      });
+    });
   });
 }

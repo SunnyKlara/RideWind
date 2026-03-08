@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/device_provider.dart';
 import '../utils/responsive_utils.dart';
+import '../widgets/chinese_color_wheel_overlay.dart';
 
 class RGBColorScreen extends StatefulWidget {
   const RGBColorScreen({super.key});
@@ -22,8 +24,116 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
   int _selectedZone = 3; // 默认选择后部(B)
   double _loopSpeed = 0.5; // 循环速度
 
+  // RGB 数值手动输入状态
+  int? _editingChannel; // null=无编辑, 0=R, 1=G, 2=B
+  final TextEditingController _valueController = TextEditingController();
+  final FocusNode _valueFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _valueFocusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    _valueFocusNode.removeListener(_onFocusChanged);
+    _valueController.dispose();
+    _valueFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (!_valueFocusNode.hasFocus && _editingChannel != null) {
+      _commitEdit();
+    }
+  }
+
+  void _startEditing(int channelIndex, double currentValue) {
+    setState(() {
+      _editingChannel = channelIndex;
+      _valueController.text = currentValue.toInt().toString();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _valueFocusNode.requestFocus();
+      _valueController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _valueController.text.length,
+      );
+    });
+  }
+
+  void _commitEdit() {
+    if (_editingChannel == null) return;
+    final channel = _editingChannel!;
+    final text = _valueController.text;
+    if (text.isNotEmpty) {
+      final parsed = int.tryParse(text) ?? _rgbValues[_selectedZone][channel].toInt();
+      final clamped = parsed.clamp(0, 255);
+      setState(() {
+        _rgbValues[_selectedZone][channel] = clamped.toDouble();
+        _editingChannel = null;
+      });
+    } else {
+      // 空输入保持原值
+      setState(() {
+        _editingChannel = null;
+      });
+    }
+  }
+
   Future<void> _handleBackNavigation() async {
     Navigator.of(context).pop();
+  }
+
+  void _openColorWheel() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ChineseColorWheelOverlay(
+          onColorSelected: _onColorSelected,
+        ),
+      ),
+    );
+  }
+
+  void _onColorSelected(int r, int g, int b) {
+    setState(() {
+      _rgbValues[_selectedZone][0] = r.toDouble();
+      _rgbValues[_selectedZone][1] = g.toDouble();
+      _rgbValues[_selectedZone][2] = b.toDouble();
+    });
+  }
+
+  Widget _buildEntryButton(BuildContext context) {
+    final size = ResponsiveUtils.scaledSize(context, 40.0).clamp(36.0, 46.0);
+    return GestureDetector(
+      onTap: _openColorWheel,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white70, width: 2.0),
+          gradient: const SweepGradient(
+            colors: [
+              Color(0xFFFF4500), // 朱砂红
+              Color(0xFFE2C100), // 藤黄
+              Color(0xFF2BAE66), // 竹绿
+              Color(0xFF1661AB), // 石青
+              Color(0xFF8B2671), // 紫棠
+              Color(0xFFFF4500), // 回到起点
+            ],
+          ),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.palette_outlined,
+            color: Colors.white,
+            size: size * 0.5,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -68,10 +178,16 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back, color: Colors.white),
-                              iconSize: ResponsiveUtils.scaledSize(context, 24.0).clamp(20.0, 28.0),
-                              onPressed: _handleBackNavigation,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                                  iconSize: ResponsiveUtils.scaledSize(context, 24.0).clamp(20.0, 28.0),
+                                  onPressed: _handleBackNavigation,
+                                ),
+                                _buildEntryButton(context),
+                              ],
                             ),
                             Text(
                               '色彩设置',
@@ -168,6 +284,7 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
                                 _rgbValues[_selectedZone][0] = value;
                               });
                             },
+                            0,
                           ),
                           
                           SizedBox(height: isSmallScreen ? 16.0 : 24.0),
@@ -182,6 +299,7 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
                                 _rgbValues[_selectedZone][1] = value;
                               });
                             },
+                            1,
                           ),
                           
                           SizedBox(height: isSmallScreen ? 16.0 : 24.0),
@@ -196,6 +314,7 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
                                 _rgbValues[_selectedZone][2] = value;
                               });
                             },
+                            2,
                           ),
                         ],
                       ),
@@ -394,6 +513,7 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
     Color color,
     double value,
     ValueChanged<double> onChanged,
+    int channelIndex,
   ) {
     final isSmallScreen = ResponsiveUtils.isSmallScreen(context);
     return Row(
@@ -435,14 +555,43 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
         
         SizedBox(
           width: ResponsiveUtils.scaledSize(context, 50.0).clamp(45.0, 55.0),
-          child: Text(
-            value.toInt().toString(),
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: ResponsiveUtils.scaledFontSize(context, 16.0, minSize: 14.0, maxSize: 18.0),
-            ),
-            textAlign: TextAlign.right,
-          ),
+          child: _editingChannel == channelIndex
+              ? TextField(
+                  controller: _valueController,
+                  focusNode: _valueFocusNode,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: ResponsiveUtils.scaledFontSize(context, 16.0, minSize: 14.0, maxSize: 18.0),
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white54),
+                    ),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white54),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white),
+                    ),
+                  ),
+                  onSubmitted: (_) => _commitEdit(),
+                )
+              : GestureDetector(
+                  onTap: () => _startEditing(channelIndex, value),
+                  child: Text(
+                    value.toInt().toString(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: ResponsiveUtils.scaledFontSize(context, 16.0, minSize: 14.0, maxSize: 18.0),
+                    ),
+                    textAlign: TextAlign.right,
+                  ),
+                ),
         ),
       ],
     );

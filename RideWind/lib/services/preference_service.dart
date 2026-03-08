@@ -37,6 +37,12 @@ class PreferenceService {
   /// SharedPreferences 键前缀：设备特定设置
   static const String _keyDeviceSettings = 'device_settings_';
 
+  /// SharedPreferences 键：自定义 RGB 颜色数据（JSON）
+  static const String _keyCustomRGBColors = 'custom_rgb_colors';
+
+  /// SharedPreferences 键：是否有自定义颜色标志位
+  static const String _keyHasCustomColors = 'has_custom_colors';
+
   /// 保存颜色预设索引
   /// 
   /// [index] 颜色预设的索引值（通常为 0-11）
@@ -182,6 +188,93 @@ class PreferenceService {
     }
   }
 
+  /// 保存自定义 RGB 颜色数据
+  ///
+  /// [zoneColors] 区域颜色映射，键为区域标识（L/M/R/B），
+  /// 值为包含 r、g、b 键的颜色值映射。
+  ///
+  /// 数据将被序列化为 JSON 字符串存储到 SharedPreferences。
+  /// 如果写入失败，会静默处理错误。
+  Future<void> saveCustomRGBColors(Map<String, Map<String, int>> zoneColors) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyCustomRGBColors, jsonEncode(zoneColors));
+    } catch (e) {
+      // 写入失败时静默处理
+    }
+  }
+
+  /// 获取已保存的自定义 RGB 颜色数据
+  ///
+  /// 返回区域颜色映射，键为区域标识（L/M/R/B），值为 RGB 颜色值映射。
+  /// RGB 值使用 `clamp(0, 255)` 约束在有效范围内。
+  /// 如果没有保存过、数据损坏或读取失败，返回 `null`。
+  Future<Map<String, Map<String, int>>?> getCustomRGBColors() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = prefs.getString(_keyCustomRGBColors);
+      if (json == null) return null;
+
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+      final result = <String, Map<String, int>>{};
+      for (final entry in decoded.entries) {
+        final colorMap = entry.value as Map<String, dynamic>;
+        result[entry.key] = {
+          'r': (colorMap['r'] as num).toInt().clamp(0, 255),
+          'g': (colorMap['g'] as num).toInt().clamp(0, 255),
+          'b': (colorMap['b'] as num).toInt().clamp(0, 255),
+        };
+      }
+      return result;
+    } catch (e) {
+      // 解析失败时清除损坏的数据并返回 null
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_keyCustomRGBColors);
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  /// 清除已保存的自定义 RGB 颜色数据
+  ///
+  /// 同时清除颜色数据和颜色来源标志位。
+  /// 如果删除失败，会静默处理错误。
+  Future<void> clearCustomRGBColors() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyCustomRGBColors);
+      await prefs.remove(_keyHasCustomColors);
+    } catch (e) {
+      // 删除失败时静默处理
+    }
+  }
+
+  /// 保存颜色来源标志位
+  ///
+  /// [value] `true` 表示当前使用自定义颜色，`false` 表示使用预设颜色
+  Future<void> saveHasCustomColors(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyHasCustomColors, value);
+    } catch (e) {
+      // 写入失败时静默处理
+    }
+  }
+
+  /// 获取颜色来源标志位
+  ///
+  /// 返回 `true` 表示当前使用自定义颜色，`false` 表示使用预设颜色。
+  /// 如果没有保存过或读取失败，返回默认值 `false`。
+  Future<bool> getHasCustomColors() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyHasCustomColors) ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// 重置所有用户偏好（用于测试和调试）
   /// 
   /// 清除所有偏好相关的持久化数据，包括：
@@ -198,6 +291,8 @@ class PreferenceService {
       await prefs.remove(_keyColorPreset);
       await prefs.remove(_keySpeedValue);
       await prefs.remove(_keyAtomizerState);
+      await prefs.remove(_keyCustomRGBColors);
+      await prefs.remove(_keyHasCustomColors);
     } catch (e) {
       // 重置失败时静默处理
     }
