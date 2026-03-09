@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/device_provider.dart';
 import '../utils/responsive_utils.dart';
-import '../widgets/chinese_color_wheel_overlay.dart';
+import 'color_ring_screen.dart';
 
 class RGBColorScreen extends StatefulWidget {
   const RGBColorScreen({super.key});
@@ -89,7 +89,7 @@ class _RGBColorScreenState extends State<RGBColorScreen> {
   void _openColorWheel() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ChineseColorWheelOverlay(
+        builder: (context) => ColorRingScreen(
           onColorSelected: _onColorSelected,
         ),
       ),

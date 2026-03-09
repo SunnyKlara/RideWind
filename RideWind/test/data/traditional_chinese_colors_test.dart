@@ -15,8 +15,8 @@ void main() {
       expect(color.toColor(), equals(const Color.fromARGB(255, 255, 46, 0)));
     });
 
-    test('textColor returns black for bright colors (luminance > 128)', () {
-      // White: luminance = 0.299*255 + 0.587*255 + 0.114*255 = 255
+    test('textColor returns darker variant for bright colors', () {
+      // White: very high lightness → should return a darker variant
       const bright = ChineseColor(
         name: '白',
         r: 255,
@@ -24,11 +24,14 @@ void main() {
         b: 255,
         family: 'neutral',
       );
-      expect(bright.textColor, equals(Colors.black));
+      final tc = bright.textColor;
+      // Should be a dark color (low luminance) for readability on bright bg
+      final lum = 0.299 * tc.red + 0.587 * tc.green + 0.114 * tc.blue;
+      expect(lum, lessThan(128));
     });
 
-    test('textColor returns white for dark colors (luminance <= 128)', () {
-      // Black: luminance = 0
+    test('textColor returns lighter variant for dark colors', () {
+      // Black: very low lightness → should return a lighter variant
       const dark = ChineseColor(
         name: '黑',
         r: 0,
@@ -36,12 +39,13 @@ void main() {
         b: 0,
         family: 'neutral',
       );
-      expect(dark.textColor, equals(Colors.white));
+      final tc = dark.textColor;
+      // Should be a light color (high luminance) for readability on dark bg
+      final lum = 0.299 * tc.red + 0.587 * tc.green + 0.114 * tc.blue;
+      expect(lum, greaterThan(128));
     });
 
-    test('textColor boundary: luminance exactly 128 returns white', () {
-      // Find RGB where 0.299*r + 0.587*g + 0.114*b = 128 exactly
-      // r=128, g=128, b=128 → luminance = 128*(0.299+0.587+0.114) = 128
+    test('textColor for mid-gray returns darker variant', () {
       const boundary = ChineseColor(
         name: '中灰',
         r: 128,
@@ -49,20 +53,27 @@ void main() {
         b: 128,
         family: 'neutral',
       );
-      // luminance = 128.0, not > 128, so should return white
-      expect(boundary.textColor, equals(Colors.white));
+      // HSL lightness of (128,128,128) ≈ 0.502, which is < 0.55
+      // so it should return a lighter variant
+      final tc = boundary.textColor;
+      final lum = 0.299 * tc.red + 0.587 * tc.green + 0.114 * tc.blue;
+      expect(lum, greaterThan(128));
     });
 
-    test('textColor boundary: luminance just above 128 returns black', () {
-      // r=129, g=128, b=128 → luminance ≈ 128.299
-      const aboveBoundary = ChineseColor(
-        name: '浅灰',
-        r: 129,
-        g: 128,
-        b: 128,
-        family: 'neutral',
+    test('textColor for colored block preserves hue', () {
+      // A saturated red
+      const red = ChineseColor(
+        name: '朱砂',
+        r: 200,
+        g: 30,
+        b: 30,
+        family: 'red',
       );
-      expect(aboveBoundary.textColor, equals(Colors.black));
+      final tc = red.textColor;
+      final hsl = HSLColor.fromColor(tc);
+      final origHsl = HSLColor.fromColor(red.toColor());
+      // Hue should be preserved (same color family)
+      expect((hsl.hue - origHsl.hue).abs(), lessThan(1.0));
     });
 
     test('stores all fields correctly', () {

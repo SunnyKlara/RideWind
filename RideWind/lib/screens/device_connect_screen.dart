@@ -21,7 +21,7 @@ import 'device_list_screen.dart'; // 设备列表页面
 import 'no_device_screen.dart'; // 添加设备页面（APP主页）
 import 'logo_upload_e2e_test_screen.dart'; // Logo上传界面（唯一可用的方案）
 import 'dev_test_screen.dart'; // 🧪 开发测试界面
-import '../widgets/chinese_color_wheel_overlay.dart'; // 🎨 中华传统色彩圆盘
+import 'color_ring_screen.dart'; // 🎨 色彩圆环界面
 
 // ╔══════════════════════════════════════════════════════════════╗
 // ║          🔄 控制模式枚举（3个模式）                            ║
@@ -3298,11 +3298,11 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
     }
   }
 
-  /// 🎨 打开中华传统色彩圆盘
+  /// 🎨 打开色彩圆环界面
   void _openChineseColorWheel() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => ChineseColorWheelOverlay(
+        builder: (context) => ColorRingScreen(
           onColorSelected: (r, g, b) {
             final pos = _selectedLightPosition;
             setState(() {
