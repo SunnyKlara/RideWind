@@ -365,6 +365,10 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
   // 🎯 存储 RunningModeWidget 通过 onKeysReady 回调传递的 key
   Map<String, GlobalKey> _runningModeKeys = {};
 
+  // 🎯 RunningModeWidget 的 GlobalKey，用于引导演示调用
+  final GlobalKey<RunningModeWidgetState> _runningModeStateKey =
+      GlobalKey<RunningModeWidgetState>(debugLabel: 'runningModeState');
+
   final List<String> _cyclePositions = ['L', 'M', 'R', 'B'];
   int _cyclePositionIndex = 0;
 
@@ -841,6 +845,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         description: '点击进入调速界面',
         icon: Icons.touch_app,
         gestureType: GestureType.tap,
+        // 调速界面已经显示，无需演示动作
       ),
       // Step 2: 上下滑动速度滚轮
       GuideStep(
@@ -848,7 +853,10 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         title: '速度调节',
         description: '上下滑动调节速度',
         icon: Icons.swap_vert,
-        gestureType: GestureType.swipeDown,
+        gestureType: GestureType.dragVertical,
+        demoAction: () async {
+          await _runningModeStateKey.currentState?.demoScrollSpeed();
+        },
       ),
       // Step 3: 点击单位标签切换
       GuideStep(
@@ -857,6 +865,9 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         description: '点击切换 km/h 和 mph',
         icon: Icons.speed,
         gestureType: GestureType.tap,
+        demoAction: () async {
+          await _runningModeStateKey.currentState?.demoToggleUnit();
+        },
       ),
       // Step 4: 长按油门按钮
       GuideStep(
@@ -865,6 +876,9 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         description: '长按油门持续加速',
         icon: Icons.rocket_launch,
         gestureType: GestureType.longPress,
+        demoAction: () async {
+          await _runningModeStateKey.currentState?.demoThrottle();
+        },
       ),
       // Step 5: 点击紧急停止
       GuideStep(
@@ -873,6 +887,9 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         description: '点击紧急停止归零',
         icon: Icons.emergency,
         gestureType: GestureType.tap,
+        demoAction: () async {
+          await _runningModeStateKey.currentState?.demoEmergencyStop();
+        },
       ),
       // Step 6: 点击汽车图片开关雾化器
       GuideStep(
@@ -882,13 +899,13 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         icon: Icons.water_drop,
         gestureType: GestureType.tap,
       ),
-      // Step 7: 长按汽车图片关机或重启（仅展示信息，gestureType 为 tap）
+      // Step 7: 长按汽车图片关机或重启
       GuideStep(
         targetKey: _carImageKey,
         title: '关机 / 重启',
         description: '长按可关机或重启',
         icon: Icons.power_settings_new,
-        gestureType: GestureType.tap,
+        gestureType: GestureType.longPress,
       ),
       // Step 8: 向左滑动进入颜色模式
       GuideStep(
@@ -2181,7 +2198,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         builder: (context, btProvider, child) {
           debugPrint('🏃 Running Mode 渲染中... isConnected=${btProvider.isConnected}');
           return RunningModeWidget(
-        key: const ValueKey('running_mode_speed'),
+        key: _runningModeStateKey,
         initialSpeed: _currentSpeed,
         maxSpeed: _maxSpeed,
         initialShowSpeedControl: true, // 🔑 直接显示调速界面

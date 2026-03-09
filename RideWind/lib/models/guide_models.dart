@@ -43,6 +43,12 @@ class GuideStep {
   /// 手势类型，定义该步骤所需的用户手势，默认为 tap
   final GestureType gestureType;
 
+  /// 演示动作回调
+  /// 引导系统在演示阶段调用此回调，编程式地操作底层 UI
+  /// 例如：滚动滚轮、切换单位等，让用户看到真实的交互效果
+  /// 返回 Future，演示完成后 resolve
+  final Future<void> Function()? demoAction;
+
   const GuideStep({
     required this.targetKey,
     required this.title,
@@ -50,6 +56,7 @@ class GuideStep {
     this.position = TooltipPosition.bottom,
     this.icon,
     this.gestureType = GestureType.tap,
+    this.demoAction,
   });
 }
 

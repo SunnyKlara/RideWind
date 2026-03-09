@@ -15,16 +15,16 @@ class FingerPointerWidget extends StatelessWidget {
   final double iconSize;
 
   /// tap 弹跳振幅
-  static const double bounceAmplitude = 10.0;
+  static const double bounceAmplitude = 14.0;
 
   /// swipe 水平/垂直位移
-  static const double swipeDistance = 60.0;
+  static const double swipeDistance = 100.0;
 
   /// drag 来回位移
-  static const double dragDistance = 40.0;
+  static const double dragDistance = 70.0;
 
   /// longPress 下压距离
-  static const double longPressDepth = 10.0;
+  static const double longPressDepth = 14.0;
 
   const FingerPointerWidget({
     super.key,
@@ -119,7 +119,7 @@ class FingerPointerWidget extends StatelessWidget {
         return Positioned(
           left: position.dx,
           top: position.dy,
-          child: child!,
+          child: IgnorePointer(child: child!),
         );
       },
       child: ColorFiltered(

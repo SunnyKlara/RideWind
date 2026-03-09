@@ -189,10 +189,10 @@ class RunningModeWidget extends StatefulWidget {
   });
 
   @override
-  State<RunningModeWidget> createState() => _RunningModeWidgetState();
+  State<RunningModeWidget> createState() => RunningModeWidgetState();
 }
 
-class _RunningModeWidgetState extends State<RunningModeWidget>
+class RunningModeWidgetState extends State<RunningModeWidget>
     with TickerProviderStateMixin {
   // 🎯 引导系统 GlobalKey
   final GlobalKey _speedWheelKey = GlobalKey(debugLabel: 'speedWheel');
@@ -307,6 +307,84 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
         'emergencyStop': _emergencyStopKey,
       });
     });
+  }
+
+  // ╔══════════════════════════════════════════════════════════════╗
+  // ║              🎯 引导演示方法（供外部调用）                     ║
+  // ╚══════════════════════════════════════════════════════════════╝
+
+  /// 演示：滚动速度滚轮（从当前速度滚到目标速度再滚回来）
+  Future<void> demoScrollSpeed() async {
+    if (_speedScrollController == null || !_speedScrollController!.hasClients) {
+      return;
+    }
+    final originalSpeed = _currentSpeed;
+    final targetSpeed = (originalSpeed + 80).clamp(0, widget.maxSpeed);
+    // 缓慢滚到目标速度
+    _speedScrollController!.animateToItem(
+      targetSpeed,
+      duration: const Duration(milliseconds: 1500),
+      curve: Curves.easeInOut,
+    );
+    await Future.delayed(const Duration(milliseconds: 1800));
+    if (!mounted) return;
+    // 停顿一下让用户看清
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    // 缓慢滚回原位
+    _speedScrollController!.animateToItem(
+      originalSpeed,
+      duration: const Duration(milliseconds: 1200),
+      curve: Curves.easeOut,
+    );
+    await Future.delayed(const Duration(milliseconds: 1400));
+  }
+
+  /// 演示：切换单位（km/h ↔ mph，切换后再切回来）
+  Future<void> demoToggleUnit() async {
+    if (!mounted) return;
+    setState(() => _isMetric = !_isMetric);
+    widget.onUnitChanged?.call(_isMetric);
+    // 停留久一点让用户看到变化
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+    setState(() => _isMetric = !_isMetric);
+    widget.onUnitChanged?.call(_isMetric);
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  /// 演示：短暂加速（加速一小段再减速回来）
+  Future<void> demoThrottle() async {
+    _startAcceleration();
+    await Future.delayed(const Duration(milliseconds: 1000));
+    if (!mounted) return;
+    _startDeceleration();
+    await Future.delayed(const Duration(milliseconds: 2000));
+  }
+
+  /// 演示：紧急停止（先加速到一个值，然后急停归零）
+  Future<void> demoEmergencyStop() async {
+    if (_speedScrollController == null || !_speedScrollController!.hasClients) {
+      return;
+    }
+    // 先缓慢滚到一个速度
+    _speedScrollController!.animateToItem(
+      80,
+      duration: const Duration(milliseconds: 1000),
+      curve: Curves.easeIn,
+    );
+    await Future.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    // 停顿一下
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+    // 急停归零
+    _speedScrollController!.animateToItem(
+      0,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+    );
+    await Future.delayed(const Duration(milliseconds: 600));
   }
 
   /// 🐛 订阅原始数据流（用于调试）
@@ -1159,10 +1237,11 @@ class _RunningModeWidgetState extends State<RunningModeWidget>
                       ),
 
                       // 单位部分（仅选中显示，紧跟在数字后）
+                      // 🎯 key 绑定在单位文本容器上，确保引导高亮精确对齐 km/h 位置
                       if (isCurrent)
-                        Padding(
+                        Container(
                           key: _unitLabelKey,
-                          padding: const EdgeInsets.only(left: 10.0),
+                          padding: const EdgeInsets.only(left: 10.0, top: 4.0, bottom: 4.0, right: 4.0),
                           child: RichText(
                             text: TextSpan(
                               children: [

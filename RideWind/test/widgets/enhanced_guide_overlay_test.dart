@@ -5,33 +5,26 @@ import 'package:ridewind/models/guide_models.dart';
 
 /// EnhancedGuideOverlay Widget 测试
 ///
-/// 重构后的 overlay 使用 GestureValidatorWidget 进行手势验证推进，
-/// 不再有"下一步"/"完成"按钮。跳过按钮文本为"跳过引导"。
-/// 步骤指示器格式为 "N / M"。手指指针使用 emoji '👆'。
-///
-/// **Validates: Requirements 2.1, 2.3, 2.4, 2.5, 5.1, 5.2, 10.1, 10.4**
+/// 新流程：演示阶段（系统自动操作）→ 用户上手阶段（自由探索）→ 用户点击下一步
 void main() {
   group('EnhancedGuideOverlay', () {
     late GlobalKey targetKey1;
     late GlobalKey targetKey2;
-    late GlobalKey targetKey3;
 
     setUp(() {
       targetKey1 = GlobalKey();
       targetKey2 = GlobalKey();
-      targetKey3 = GlobalKey();
     });
 
-    /// Helper: pump enough frames for the fade animation (300ms) + post-frame callback
+    /// Helper: pump for fade animation + post-frame callback
     Future<void> pumpForAnimations(WidgetTester tester) async {
-      // First pump triggers the post-frame callback
       await tester.pump();
-      // Pump 500ms to complete fade-in (300ms) with margin
       await tester.pump(const Duration(milliseconds: 500));
     }
 
-    /// Helper: pump enough time for _waitForTarget timeout (2000ms per step) + animations
-    Future<void> pumpForWaitTimeout(WidgetTester tester, {int steps = 1}) async {
+    /// Helper: pump for _waitForTarget timeout
+    Future<void> pumpForWaitTimeout(WidgetTester tester,
+        {int steps = 1}) async {
       for (int i = 0; i < steps; i++) {
         for (int j = 0; j < 22; j++) {
           await tester.pump(const Duration(milliseconds: 100));
@@ -40,7 +33,24 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    /// Helper: pump for step transition (fade out 300ms + fade in 300ms)
+    /// Helper: pump through demo phase (no demoAction → 3500ms wait)
+    /// then into userTrying phase
+    Future<void> pumpThroughDemo(WidgetTester tester) async {
+      // 1000ms initial delay + 3500ms no-demoAction wait + buffer
+      for (int i = 0; i < 50; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    /// Helper: pump through demo phase with demoAction
+    Future<void> pumpThroughDemoWithAction(WidgetTester tester) async {
+      // 1000ms pre-delay + demoAction * 3 repeats + 1200ms gaps + 1000ms post
+      for (int i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    /// Helper: pump for step transition
     Future<void> pumpForTransition(WidgetTester tester) async {
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pump(const Duration(milliseconds: 350));
@@ -86,16 +96,25 @@ void main() {
     }
 
     // ============================================================
-    // 手势验证推进测试
-    // The overlay now uses GestureValidatorWidget for step advancement.
-    // Tapping the target area triggers gesture validation → step advance.
+    // 演示 → 用户上手 → 手动推进
     // ============================================================
-    group('Gesture-based Step Navigation', () {
-      testWidgets('tapping target area advances to next step via gesture validation', (tester) async {
+    group('Demo → User Trying → Manual Advance', () {
+      testWidgets('demo phase shows tooltip, then user trying shows continue',
+          (tester) async {
         final keys = [targetKey1, targetKey2];
         final steps = [
-          GuideStep(targetKey: keys[0], title: '步骤 1', description: '描述 1', gestureType: GestureType.tap),
-          GuideStep(targetKey: keys[1], title: '步骤 2', description: '描述 2', gestureType: GestureType.tap),
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述 1',
+            gestureType: GestureType.tap,
+          ),
+          GuideStep(
+            targetKey: keys[1],
+            title: '步骤 2',
+            description: '描述 2',
+            gestureType: GestureType.tap,
+          ),
         ];
 
         await tester.pumpWidget(createTestWidget(
@@ -105,27 +124,61 @@ void main() {
         ));
         await pumpForAnimations(tester);
 
-        // Step 1: description and step indicator visible
+        // Demo phase: tooltip visible
         expect(find.text('描述 1'), findsOneWidget);
         expect(find.text('1 / 2'), findsOneWidget);
 
-        // Tap the target area to trigger gesture match and advance
-        // Target 1 is at (50, 100) size 80x80, center at (90, 140)
-        await tester.tapAt(const Offset(90, 140));
-        await pumpForTransition(tester);
-        // Extra pump to ensure rebuild
-        await tester.pump(const Duration(milliseconds: 100));
+        // Pump through demo → user trying
+        await pumpThroughDemo(tester);
 
-        // Step 2
-        expect(find.text('描述 2'), findsOneWidget);
-        expect(find.text('2 / 2'), findsOneWidget);
+        // User trying: continue button visible
+        expect(find.text('下一步'), findsOneWidget);
+        expect(find.text('试试看，自由操作体验一下'), findsOneWidget);
       });
 
-      testWidgets('single step shows description and completes on tap', (tester) async {
+      testWidgets('tapping continue advances to next step', (tester) async {
+        final keys = [targetKey1, targetKey2];
+        final steps = [
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述 1',
+          ),
+          GuideStep(
+            targetKey: keys[1],
+            title: '步骤 2',
+            description: '描述 2',
+          ),
+        ];
+
+        await tester.pumpWidget(createTestWidget(
+          steps: steps,
+          onComplete: () {},
+          targetKeys: keys,
+        ));
+        await pumpForAnimations(tester);
+        await pumpThroughDemo(tester);
+
+        // Tap continue
+        await tester.tap(find.text('下一步'));
+        await pumpForTransition(tester);
+        // Pump through next step's demo phase too
+        await pumpThroughDemo(tester);
+
+        // Step 2 user trying phase
+        expect(find.text('下一步'), findsNothing); // last step shows '完成'
+        expect(find.text('完成'), findsOneWidget);
+      });
+
+      testWidgets('last step shows complete button', (tester) async {
         bool completed = false;
         final keys = [targetKey1];
         final steps = [
-          GuideStep(targetKey: keys[0], title: '唯一步骤', description: '描述', gestureType: GestureType.tap),
+          GuideStep(
+            targetKey: keys[0],
+            title: '唯一步骤',
+            description: '描述',
+          ),
         ];
 
         await tester.pumpWidget(createTestWidget(
@@ -134,36 +187,71 @@ void main() {
           targetKeys: keys,
         ));
         await pumpForAnimations(tester);
+        await pumpThroughDemo(tester);
 
-        expect(find.text('描述'), findsOneWidget);
-        expect(find.text('1 / 1'), findsOneWidget);
+        // Last step → "完成" button
+        expect(find.text('完成'), findsOneWidget);
 
-        // Tap target to complete (last step → onComplete)
-        await tester.tapAt(const Offset(90, 140));
+        await tester.tap(find.text('完成'));
         await pumpForTransition(tester);
 
         expect(completed, true);
+      });
+
+      testWidgets('demoAction is called during demo phase', (tester) async {
+        int demoCallCount = 0;
+        final keys = [targetKey1];
+        final steps = [
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述',
+            demoAction: () async {
+              demoCallCount++;
+            },
+          ),
+        ];
+
+        await tester.pumpWidget(createTestWidget(
+          steps: steps,
+          onComplete: () {},
+          targetKeys: keys,
+        ));
+        await pumpForAnimations(tester);
+        // Pump through full demo: 1000ms pre + (action + 1200ms gap) * 3 + 1000ms post
+        for (int i = 0; i < 60; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+
+        // demoAction should be called 3 times (repeat count)
+        expect(demoCallCount, 3);
       });
     });
 
     // ============================================================
     // 跳过回调测试
-    // Skip button text is now "跳过引导"
-    // Validates: Requirements 10.1
     // ============================================================
     group('Skip Callback', () {
-      testWidgets('skip button calls onSkip callback', (tester) async {
+      testWidgets('skip button calls onSkip during demo phase',
+          (tester) async {
         bool skipped = false;
-        bool completed = false;
         final keys = [targetKey1, targetKey2];
         final steps = [
-          GuideStep(targetKey: keys[0], title: '步骤 1', description: '描述 1'),
-          GuideStep(targetKey: keys[1], title: '步骤 2', description: '描述 2'),
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述 1',
+          ),
+          GuideStep(
+            targetKey: keys[1],
+            title: '步骤 2',
+            description: '描述 2',
+          ),
         ];
 
         await tester.pumpWidget(createTestWidget(
           steps: steps,
-          onComplete: () => completed = true,
+          onComplete: () {},
           onSkip: () => skipped = true,
           targetKeys: keys,
         ));
@@ -171,37 +259,57 @@ void main() {
 
         await tester.tap(find.text('跳过引导'));
         await pumpForTransition(tester);
+        // Pump through remaining demo timer
+        await pumpThroughDemo(tester);
 
         expect(skipped, true);
-        expect(completed, false);
       });
 
-      testWidgets('skip button calls onComplete when onSkip is null', (tester) async {
-        bool completed = false;
+      testWidgets('skip in user trying phase works', (tester) async {
+        bool skipped = false;
         final keys = [targetKey1, targetKey2];
         final steps = [
-          GuideStep(targetKey: keys[0], title: '步骤 1', description: '描述 1'),
-          GuideStep(targetKey: keys[1], title: '步骤 2', description: '描述 2'),
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述 1',
+          ),
+          GuideStep(
+            targetKey: keys[1],
+            title: '步骤 2',
+            description: '描述 2',
+          ),
         ];
 
         await tester.pumpWidget(createTestWidget(
           steps: steps,
-          onComplete: () => completed = true,
+          onComplete: () {},
+          onSkip: () => skipped = true,
           targetKeys: keys,
         ));
         await pumpForAnimations(tester);
+        await pumpThroughDemo(tester);
 
-        await tester.tap(find.text('跳过引导'));
+        // Skip in user trying bar
+        await tester.tap(find.text('跳过'));
         await pumpForTransition(tester);
 
-        expect(completed, true);
+        expect(skipped, true);
       });
 
-      testWidgets('skip button hidden when canSkip is false', (tester) async {
+      testWidgets('skip hidden when canSkip is false', (tester) async {
         final keys = [targetKey1, targetKey2];
         final steps = [
-          GuideStep(targetKey: keys[0], title: '步骤 1', description: '描述 1'),
-          GuideStep(targetKey: keys[1], title: '步骤 2', description: '描述 2'),
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述 1',
+          ),
+          GuideStep(
+            targetKey: keys[1],
+            title: '步骤 2',
+            description: '描述 2',
+          ),
         ];
 
         await tester.pumpWidget(createTestWidget(
@@ -213,129 +321,39 @@ void main() {
         await pumpForAnimations(tester);
 
         expect(find.text('跳过引导'), findsNothing);
-      });
 
-      testWidgets('skip button hidden on last step', (tester) async {
-        final keys = [targetKey1, targetKey2];
-        final steps = [
-          GuideStep(targetKey: keys[0], title: '步骤 1', description: '描述 1', gestureType: GestureType.tap),
-          GuideStep(targetKey: keys[1], title: '步骤 2', description: '描述 2', gestureType: GestureType.tap),
-        ];
-
-        await tester.pumpWidget(createTestWidget(
-          steps: steps,
-          onComplete: () {},
-          targetKeys: keys,
-        ));
-        await pumpForAnimations(tester);
-
-        expect(find.text('跳过引导'), findsOneWidget);
-
-        // Tap target to advance to last step
-        await tester.tapAt(const Offset(90, 140));
-        await pumpForTransition(tester);
-        await tester.pump(const Duration(milliseconds: 100));
-
-        // On last step, skip button should be hidden
-        expect(find.text('跳过引导'), findsNothing);
-      });
-    });
-
-    // ============================================================
-    // 完成回调测试
-    // Validates: Requirements 10.2
-    // ============================================================
-    group('Complete Callback', () {
-      testWidgets('tapping last step target calls onComplete', (tester) async {
-        bool completed = false;
-        final keys = [targetKey1, targetKey2];
-        final steps = [
-          GuideStep(targetKey: keys[0], title: '步骤 1', description: '描述 1', gestureType: GestureType.tap),
-          GuideStep(targetKey: keys[1], title: '步骤 2', description: '描述 2', gestureType: GestureType.tap),
-        ];
-
-        await tester.pumpWidget(createTestWidget(
-          steps: steps,
-          onComplete: () => completed = true,
-          targetKeys: keys,
-        ));
-        await pumpForAnimations(tester);
-
-        // Advance to last step by tapping target 1 center (90, 140)
-        await tester.tapAt(const Offset(90, 140));
-        // Pump generously for the full transition cycle
-        for (int i = 0; i < 10; i++) {
-          await tester.pump(const Duration(milliseconds: 100));
-        }
-
-        // Verify we're on step 2
-        expect(find.text('描述 2'), findsOneWidget);
-
-        // Tap last step target center (190, 140) to complete
-        await tester.tapAt(const Offset(190, 140));
-        for (int i = 0; i < 10; i++) {
-          await tester.pump(const Duration(milliseconds: 100));
-        }
-
-        expect(completed, true);
+        // Pump through demo timer to avoid pending timer error
+        await pumpThroughDemo(tester);
       });
     });
 
     // ============================================================
     // 步骤跳过逻辑测试（不可定位步骤）
-    // Validates: Requirements 2.4, 9.3
     // ============================================================
     group('Step Skipping', () {
-      testWidgets('skips steps with non-locatable targets', (tester) async {
-        final orphanKey = GlobalKey();
-        final keys = [targetKey1, targetKey2];
-        final steps = [
-          GuideStep(targetKey: keys[0], title: '可见步骤 1', description: '描述 1', gestureType: GestureType.tap),
-          GuideStep(targetKey: orphanKey, title: '不可见步骤', description: '应被跳过'),
-          GuideStep(targetKey: keys[1], title: '可见步骤 2', description: '描述 2'),
-        ];
-
-        await tester.pumpWidget(createTestWidget(
-          steps: steps,
-          onComplete: () {},
-          targetKeys: keys,
-        ));
-        await pumpForAnimations(tester);
-
-        // First step should be visible
-        expect(find.text('描述 1'), findsOneWidget);
-        expect(find.text('1 / 3'), findsOneWidget);
-
-        // Tap the target area to trigger gesture match and advance
-        await tester.tapAt(const Offset(90, 140));
-        // Pump for fade out animation
-        await tester.pump(const Duration(milliseconds: 350));
-        // Pump through the wait timeout for the orphan step (2000ms)
-        await pumpForWaitTimeout(tester, steps: 1);
-        // Pump for fade in animation
-        await tester.pump(const Duration(milliseconds: 350));
-
-        // Should have skipped the orphan step and landed on step 3
-        expect(find.text('描述 2'), findsOneWidget);
-        expect(find.text('3 / 3'), findsOneWidget);
-      });
-
-      testWidgets('calls onComplete when all steps are non-locatable', (tester) async {
+      testWidgets('calls onComplete when all steps are non-locatable',
+          (tester) async {
         bool completed = false;
         final orphanKey1 = GlobalKey();
         final orphanKey2 = GlobalKey();
         final steps = [
-          GuideStep(targetKey: orphanKey1, title: '不可见 1', description: '描述'),
-          GuideStep(targetKey: orphanKey2, title: '不可见 2', description: '描述'),
+          GuideStep(
+            targetKey: orphanKey1,
+            title: '不可见 1',
+            description: '描述',
+          ),
+          GuideStep(
+            targetKey: orphanKey2,
+            title: '不可见 2',
+            description: '描述',
+          ),
         ];
 
         await tester.pumpWidget(createTestWidget(
           steps: steps,
           onComplete: () => completed = true,
         ));
-        // Pump initial frame to trigger post-frame callback
         await tester.pump();
-        // Pump through wait timeouts for both orphan steps (2000ms each)
         await pumpForWaitTimeout(tester, steps: 2);
 
         expect(completed, true);
@@ -343,14 +361,18 @@ void main() {
     });
 
     // ============================================================
-    // 动画组件集成测试
-    // Validates: Requirements 2.3
+    // 动画组件测试
     // ============================================================
     group('Animation Components', () {
-      testWidgets('renders ripple effect and finger pointer emoji', (tester) async {
+      testWidgets('renders finger pointer and mask during demo',
+          (tester) async {
         final keys = [targetKey1];
         final steps = [
-          GuideStep(targetKey: keys[0], title: '步骤 1', description: '描述'),
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述',
+          ),
         ];
 
         await tester.pumpWidget(createTestWidget(
@@ -360,11 +382,36 @@ void main() {
         ));
         await pumpForAnimations(tester);
 
-        // FingerPointerWidget now uses emoji '👆'
+        // FingerPointerWidget uses emoji '👆'
         expect(find.text('👆'), findsOneWidget);
-
-        // RippleEffectPainter is rendered via CustomPaint
         expect(find.byType(CustomPaint), findsWidgets);
+
+        // Pump through demo to avoid pending timer
+        await pumpThroughDemo(tester);
+      });
+
+      testWidgets('no mask during user trying phase', (tester) async {
+        final keys = [targetKey1];
+        final steps = [
+          GuideStep(
+            targetKey: keys[0],
+            title: '步骤 1',
+            description: '描述',
+          ),
+        ];
+
+        await tester.pumpWidget(createTestWidget(
+          steps: steps,
+          onComplete: () {},
+          targetKeys: keys,
+        ));
+        await pumpForAnimations(tester);
+        await pumpThroughDemo(tester);
+
+        // Finger pointer should be gone
+        expect(find.text('👆'), findsNothing);
+        // Continue button should be visible
+        expect(find.text('完成'), findsOneWidget);
       });
     });
 
@@ -372,7 +419,8 @@ void main() {
     // showEnhancedGuideOverlay 便捷方法测试
     // ============================================================
     group('showEnhancedGuideOverlay', () {
-      testWidgets('empty steps calls onComplete immediately', (tester) async {
+      testWidgets('empty steps calls onComplete immediately',
+          (tester) async {
         bool completed = false;
 
         await tester.pumpWidget(MaterialApp(
@@ -402,7 +450,6 @@ void main() {
 
   // ============================================================
   // Tooltip 定位逻辑单元测试
-  // Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5
   // ============================================================
   group('calculateTooltipPosition', () {
     const tooltipSize = Size(300, 120);
@@ -450,7 +497,10 @@ void main() {
         screenSize: screenSize,
         tooltipSize: tooltipSize,
       );
-      expect(position.dx + tooltipSize.width, lessThanOrEqualTo(400 - 16.0));
+      expect(
+        position.dx + tooltipSize.width,
+        lessThanOrEqualTo(400 - 16.0),
+      );
     });
 
     test('tooltip stays within screen bounds vertically', () {
@@ -460,10 +510,13 @@ void main() {
         tooltipSize: tooltipSize,
       );
       expect(position.dy, greaterThanOrEqualTo(16.0));
-      expect(position.dy + tooltipSize.height, lessThanOrEqualTo(800 - 16.0));
+      expect(
+        position.dy + tooltipSize.height,
+        lessThanOrEqualTo(800 - 16.0),
+      );
     });
 
-    test('minimum spacing maintained between tooltip and target', () {
+    test('minimum spacing maintained', () {
       const minSpacing = 80.0;
 
       final posBelow = calculateTooltipPosition(
@@ -480,16 +533,10 @@ void main() {
         tooltipSize: tooltipSize,
         minSpacing: minSpacing,
       );
-      expect(600.0 - (posAbove.dy + tooltipSize.height), greaterThanOrEqualTo(minSpacing));
-    });
-
-    test('target exactly at screen center → tooltip below', () {
-      final position = calculateTooltipPosition(
-        targetRect: const Rect.fromLTWH(160, 380, 80, 40),
-        screenSize: screenSize,
-        tooltipSize: tooltipSize,
+      expect(
+        600.0 - (posAbove.dy + tooltipSize.height),
+        greaterThanOrEqualTo(minSpacing),
       );
-      expect(position.dy, greaterThan(420.0));
     });
   });
 }

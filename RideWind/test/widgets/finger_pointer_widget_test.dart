@@ -298,16 +298,16 @@ void main() {
         expect(widget.iconSize, equals(64.0));
       });
 
-      test('bounce amplitude is 10px', () {
-        expect(FingerPointerWidget.bounceAmplitude, equals(10.0));
+      test('bounce amplitude is 14px', () {
+        expect(FingerPointerWidget.bounceAmplitude, equals(14.0));
       });
 
-      test('swipe distance is 60px', () {
-        expect(FingerPointerWidget.swipeDistance, equals(60.0));
+      test('swipe distance is 100px', () {
+        expect(FingerPointerWidget.swipeDistance, equals(100.0));
       });
 
-      test('drag distance is 40px', () {
-        expect(FingerPointerWidget.dragDistance, equals(40.0));
+      test('drag distance is 70px', () {
+        expect(FingerPointerWidget.dragDistance, equals(70.0));
       });
     });
 

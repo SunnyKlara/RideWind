@@ -245,19 +245,26 @@ class HighlightMaskPainter extends CustomPainter {
 
       canvas.drawPath(combinedPath, paint);
 
-      // 绘制高亮边框
+      // 绘制高亮边框 — 双层发光效果，让目标区域更醒目
+      final highlightRRect = RRect.fromRectAndRadius(
+        highlightRect,
+        Radius.circular(highlightBorderRadius),
+      );
+
+      // 外层发光
+      final glowPaint = Paint()
+        ..color = const Color(0xFF25C485).withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6.0
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
+      canvas.drawRRect(highlightRRect, glowPaint);
+
+      // 内层实线边框
       final borderPaint = Paint()
         ..color = const Color(0xFF25C485)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          highlightRect,
-          Radius.circular(highlightBorderRadius),
-        ),
-        borderPaint,
-      );
+      canvas.drawRRect(highlightRRect, borderPaint);
     } else {
       // 如果没有目标元素，绘制全屏遮罩
       canvas.drawPath(fullScreenPath, paint);
