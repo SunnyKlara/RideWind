@@ -44,15 +44,15 @@ class ColorDetailPanel extends StatelessWidget {
   Widget _buildColorContent(ChineseColor c) {
     return Container(
       key: ValueKey('${c.family}_${c.name}'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -63,52 +63,76 @@ class ColorDetailPanel extends StatelessWidget {
             c.name,
             style: const TextStyle(
               color: Colors.black87,
-              fontSize: 16,
+              fontSize: 32,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
           Container(
-            width: 40,
-            height: 40,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               color: c.toColor(),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.grey.shade300, width: 2),
+              border: Border.all(color: Colors.grey.shade300, width: 2.5),
               boxShadow: [
                 BoxShadow(
                   color: c.toColor().withOpacity(0.4),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
           Text(
-            'R:${c.r} G:${c.g} B:${c.b}',
+            'R:${c.r}  G:${c.g}  B:${c.b}',
             style: TextStyle(
               color: Colors.grey.shade600,
-              fontSize: 11,
+              fontSize: 20,
               fontFamily: 'monospace',
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          Text(
+            '#${c.r.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+            '${c.g.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+            '${c.b.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 18,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: Text(
+              c.colorDescription,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 18,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 20),
           SizedBox(
-            height: 30,
+            height: 48,
             child: TextButton(
               onPressed: onConfirm,
               style: TextButton.styleFrom(
                 backgroundColor: c.toColor(),
                 foregroundColor: c.textColor,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 0),
+                padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 0),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(24),
                 ),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text('确认', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              child: const Text('使用此色', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
             ),
           ),
         ],

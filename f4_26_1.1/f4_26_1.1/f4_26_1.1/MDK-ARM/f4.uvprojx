@@ -436,6 +436,11 @@
               <FilePath>..\Core\Src\rx.c</FilePath>
             </File>
             <File>
+              <FileName>ota.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\ota.c</FilePath>
+            </File>
+            <File>
               <FileName>logo.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Core\Src\logo.c</FilePath>

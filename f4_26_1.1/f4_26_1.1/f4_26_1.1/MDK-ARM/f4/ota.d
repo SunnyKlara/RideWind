@@ -1,4 +1,4 @@
-f4/rx.o: ..\Core\Src\rx.c ..\Core\Inc\rx.h ..\Core\Inc\main.h \
+f4/ota.o: ..\Core\Src\ota.c ..\Core\Inc\ota.h ..\Core\Inc\main.h \
   ..\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal.h \
   ..\Core\Inc\stm32f4xx_hal_conf.h \
   ..\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_rcc.h \
@@ -24,8 +24,7 @@ f4/rx.o: ..\Core\Src\rx.c ..\Core\Inc\rx.h ..\Core\Inc\main.h \
   ..\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_tim.h \
   ..\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_tim_ex.h \
   ..\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_uart.h \
-  ..\Core\Inc\spi.h ..\Core\Inc\tim.h ..\Core\Inc\gpio.h \
-  ..\Core\Inc\usart.h ..\Core\Inc\lcd.h ..\Core\Inc\dma.h \
+  ..\Core\Inc\w25q128.h ..\Core\Inc\dma.h ..\Core\Inc\spi.h \
+  ..\Core\Inc\tim.h ..\Core\Inc\gpio.h ..\Core\Inc\lcd.h \
   ..\Core\Inc\lcd_init.h ..\Core\Inc\xuanniu.h ..\Core\Inc\ws2812.h \
-  ..\Core\Inc\w25q128.h ..\Core\Inc\vs1003.h ..\Core\Inc\engine_audio.h \
-  ..\Core\Inc\logo.h ..\Core\Inc\ota.h
+  ..\Core\Inc\vs1003.h

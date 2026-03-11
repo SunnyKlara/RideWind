@@ -33,6 +33,7 @@
 #include "vs1003.h"
 #include "engine_audio.h"
 #include "logo.h"  // 🆕 Logo上传模块
+#include "ota.h"   // 🆕 OTA固件升级模块
 #include "stdio.h"
 #include "rx.h"
 #include "string.h"
@@ -199,6 +200,9 @@ int main(void)
   // 初始化Logo模块
   Logo_Init();
   
+  // 🆕 初始化OTA固件升级模块
+  OTA_Init();
+  
   // Sine wave test - commented out to avoid startup beep
   // VS1003_SineTest(0);
   // HAL_Delay(5000);
@@ -211,8 +215,8 @@ int main(void)
   while (1)
   {
 //	  VS1003_SineTest(1);
-	  // 🔥 优化：Logo上传期间跳过LCD/Encoder/PWM刷新，提升10倍速度
-	  if(Logo_GetState() != LOGO_STATE_RECEIVING) {
+	  // 🔥 优化：Logo上传或OTA接收期间跳过LCD/Encoder/PWM刷新，专注数据接收
+	  if(Logo_GetState() != LOGO_STATE_RECEIVING && OTA_GetState() != OTA_STATE_RECEIVING) {
 		  LCD();
 		  Encoder();
 		  PWM();
@@ -221,6 +225,7 @@ int main(void)
 		  Breath_Process();       // ✅ 呼吸灯效果处理（UI4外持续运行）
 	  }
 	  RX_proc();  // 🔵 蓝牙命令接收处理
+	  OTA_CheckTimeout();  // 🔵 OTA 接收超时检测（30s 无活动恢复 IDLE）
 	  Logo_ProcessBuffer();  // 🔵 处理Logo缓冲区 (从缓冲区写入Flash)
 	  EngineAudio_Process();  // 🔊 音频播放处理（每次循环都调用，确保数据持续发送）
 

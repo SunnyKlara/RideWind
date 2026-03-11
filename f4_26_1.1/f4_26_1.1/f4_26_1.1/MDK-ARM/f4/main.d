@@ -28,4 +28,4 @@ f4/main.o: ..\Core\Src\main.c ..\Core\Inc\main.h \
   ..\Core\Inc\usart.h ..\Core\Inc\gpio.h ..\Core\Inc\xuanniu.h \
   ..\Core\Inc\lcd.h ..\Core\Inc\lcd_init.h ..\Core\Inc\ws2812.h \
   ..\Core\Inc\w25q128.h ..\Core\Inc\vs1003.h ..\Core\Inc\engine_audio.h \
-  ..\Core\Inc\logo.h ..\Core\Inc\rx.h
+  ..\Core\Inc\logo.h ..\Core\Inc\ota.h ..\Core\Inc\rx.h

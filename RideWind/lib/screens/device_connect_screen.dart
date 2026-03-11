@@ -22,6 +22,7 @@ import 'no_device_screen.dart'; // 添加设备页面（APP主页）
 import 'logo_upload_e2e_test_screen.dart'; // Logo上传界面（唯一可用的方案）
 import 'dev_test_screen.dart'; // 🧪 开发测试界面
 import 'color_ring_screen.dart'; // 🎨 色彩圆环界面
+import 'ota_upgrade_screen.dart'; // 🔄 OTA 固件升级界面
 
 // ╔══════════════════════════════════════════════════════════════╗
 // ║          🔄 控制模式枚举（3个模式）                            ║
@@ -1273,6 +1274,26 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             });
           },
         ),
+        // OTA 固件升级选项
+        PopupMenuItem(
+          child: const Row(
+            children: [
+              Icon(Icons.system_update_outlined, color: Colors.white, size: 20),
+              SizedBox(width: 12),
+              Text(
+                'OTA 升级',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ],
+          ),
+          onTap: () {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _navigateToOtaUpgrade(parentContext);
+              }
+            });
+          },
+        ),
         // 移除设备选项
         PopupMenuItem(
           child: const Row(
@@ -1319,6 +1340,26 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         }
       }
     });
+  }
+
+  /// 导航到 OTA 固件升级页面（仅蓝牙已连接时允许）
+  void _navigateToOtaUpgrade(BuildContext parentContext) {
+    final btProvider = Provider.of<BluetoothProvider>(context, listen: false);
+    if (!btProvider.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请先连接蓝牙设备'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const OtaUpgradeScreen()),
+    );
   }
 
   void _showRemoveDeviceDialog(BuildContext context) {

@@ -20,26 +20,110 @@ class SortedFamily {
   int get maxRows => columnLengths.isEmpty ? 0 : columnLengths.reduce(max);
 }
 
+/// 预渲染的文字标签缓存条目
+class _CachedLabel {
+  final TextPainter fullPainter;   // 完整名字
+  final TextPainter? shortPainter; // 截断到1字的版本（可能为 null）
+
+  _CachedLabel({required this.fullPainter, this.shortPainter});
+}
+
+/// 文字标签预渲染缓存
+///
+/// 在 initState 时一次性为所有颜色创建多种字号的 TextPainter 并 layout，
+/// 绘制时直接查表，避免每帧重复创建。
+class LabelCache {
+  /// key = "${colorName}_${family}_${fontSize.toStringAsFixed(1)}"
+  final Map<String, _CachedLabel> _cache = {};
+
+  /// 预渲染所有颜色在指定字号范围内的文字
+  void preRender(List<SortedFamily> families) {
+    _cache.clear();
+    // 字号范围 4.0 ~ 10.0，步长 0.5（覆盖 clamp 后的所有可能值）
+    final fontSizes = <double>[];
+    for (double fs = 4.0; fs <= 10.0; fs += 0.5) {
+      fontSizes.add(fs);
+    }
+
+    for (final family in families) {
+      for (final color in family.colors) {
+        for (final fontSize in fontSizes) {
+          final key = '${color.name}_${color.family}_${fontSize.toStringAsFixed(1)}';
+          if (_cache.containsKey(key)) continue;
+
+          final textColor = color.textColor;
+          final style = TextStyle(
+            color: textColor,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w600,
+          );
+
+          // 完整名字
+          final fullPainter = TextPainter(
+            text: TextSpan(text: color.name, style: style),
+            textDirection: TextDirection.ltr,
+            textAlign: TextAlign.center,
+          )..layout();
+
+          // 截断到1字
+          TextPainter? shortPainter;
+          if (color.name.length > 1) {
+            shortPainter = TextPainter(
+              text: TextSpan(text: color.name.substring(0, 1), style: style),
+              textDirection: TextDirection.ltr,
+              textAlign: TextAlign.center,
+            )..layout();
+          }
+
+          _cache[key] = _CachedLabel(
+            fullPainter: fullPainter,
+            shortPainter: shortPainter,
+          );
+        }
+      }
+    }
+  }
+
+  /// 获取缓存的标签，返回能放进指定区域的 TextPainter，或 null
+  TextPainter? get(ChineseColor color, double fontSize,
+      double maxWidth, double maxHeight) {
+    final key = '${color.name}_${color.family}_${fontSize.toStringAsFixed(1)}';
+    final cached = _cache[key];
+    if (cached == null) return null;
+
+    // 先试完整名字
+    if (cached.fullPainter.width <= maxWidth * 1.05 &&
+        cached.fullPainter.height <= maxHeight * 0.95) {
+      return cached.fullPainter;
+    }
+
+    // 再试截断版
+    if (cached.shortPainter != null &&
+        cached.shortPainter!.width <= maxWidth * 1.05 &&
+        cached.shortPainter!.height <= maxHeight * 0.95) {
+      return cached.shortPainter;
+    }
+
+    return null;
+  }
+}
+
 /// 色彩圆环绘制器 — COPIC 风格色轮
 ///
 /// 两层结构：
 /// 1. 最内圈：白灰色系（neutral）形成闭合圆环
 /// 2. 外圈：彩色色系，内圈固定，外圈自由生长
-/// 两层之间有间隙
 class ColorRingPainter extends CustomPainter {
   final List<SortedFamily> sortedFamilies;
   final double rotationAngle;
   final ChineseColor? selectedColor;
-  final double innerRadius; // 灰度内环的内圈半径
+  final double innerRadius;
   final double outerRadius;
+  final LabelCache? labelCache;
 
-  /// 灰度内环的行高（单行闭合环）
   static const double neutralRingHeight = 28.0;
-  /// 灰度内环和彩色外环之间的间隙
   static const double ringGap = 6.0;
-  /// 彩色色块行高
   static const double rowHeight = 28.0;
-
   static const double sectorGap = 0.016;
   static const double layerGap = 1.5;
   static const double colGap = 1.5;
@@ -52,12 +136,10 @@ class ColorRingPainter extends CustomPainter {
     this.selectedColor,
     required this.innerRadius,
     required this.outerRadius,
+    this.labelCache,
   });
 
-  /// 灰度内环的外圈半径
   double get neutralOuterRadius => innerRadius + neutralRingHeight;
-
-  /// 彩色外环的起始半径
   double get colorRingInnerRadius => neutralOuterRadius + ringGap;
 
   SortedFamily? get _neutralFamily {
@@ -78,13 +160,11 @@ class ColorRingPainter extends CustomPainter {
     canvas.save();
     canvas.translate(center.dx, center.dy);
 
-    // 1. 绘制灰度内环
     final neutral = _neutralFamily;
     if (neutral != null && neutral.colors.isNotEmpty) {
       _drawNeutralRing(canvas, neutral);
     }
 
-    // 2. 绘制彩色外环
     final colorFams = _colorFamilies;
     if (colorFams.isNotEmpty) {
       _drawColorRing(canvas, colorFams);
@@ -93,7 +173,6 @@ class ColorRingPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// 绘制灰度内环 — 按明度排序形成渐变闭合圆环，带文字
   void _drawNeutralRing(Canvas canvas, SortedFamily neutral) {
     final colors = List<ChineseColor>.from(neutral.colors);
     if (colors.isEmpty) return;
@@ -135,7 +214,6 @@ class ColorRingPainter extends CustomPainter {
       }
     }
 
-    // 精致的边框线
     final borderPaint = Paint()
       ..color = Colors.black12
       ..style = PaintingStyle.stroke
@@ -144,7 +222,6 @@ class ColorRingPainter extends CustomPainter {
     canvas.drawCircle(Offset.zero, neutralOuterRadius - 0.5, borderPaint);
   }
 
-  /// 绘制彩色外环 — 内圈固定，外圈自由生长
   void _drawColorRing(Canvas canvas, List<SortedFamily> colorFams) {
     final familyCount = colorFams.length;
     final List<int> familyCols =
@@ -225,70 +302,91 @@ class ColorRingPainter extends CustomPainter {
     final radialHeight = rOuter - rInner;
     final minDim = min(arcLength, radialHeight);
 
-    // 极小色块也尝试显示文字
     if (minDim < 6) return;
 
-    final fontSize = (minDim * 0.32).clamp(4.0, 10.0);
+    // 字号基于径向位置递进：内圈小，外圈大
+    // rInner 范围大约 90~400+，映射到字号 6.0~10.0
+    final radialProgress = ((rInner - 80) / 350).clamp(0.0, 1.0);
+    final baseSize = 6.0 + radialProgress * 4.0;  // 6.0 → 10.0
 
-    // 先尝试完整名字，放不下就截断
+    // 根据字数缩放：确保长名字不会比短名字的字号大
+    final charCount = color.name.length;
+    final charScale = charCount <= 1 ? 1.0 : charCount == 2 ? 0.85 : 0.7;
+
+    // 同时不能超过色块能容纳的大小
+    final maxByBlock = (minDim * 0.36).clamp(5.0, 10.0);
+    final rawFontSize = min(baseSize * charScale, maxByBlock);
+
+    // 量化字号到 0.5 步长，匹配缓存 key
+    final fontSize = (rawFontSize * 2).roundToDouble() / 2;
+
+    // 从缓存获取预渲染的 TextPainter
+    TextPainter? textPainter;
+    if (labelCache != null) {
+      textPainter = labelCache!.get(color, fontSize, arcLength, radialHeight);
+    }
+
+    // 缓存未命中时回退到即时创建（不应该发生）
+    if (textPainter == null && labelCache == null) {
+      textPainter = _createLabelFallback(color, fontSize, arcLength, radialHeight);
+    }
+
+    if (textPainter == null) return;
+
+    final labelCenter = Offset(
+      midRadius * cos(midAngle),
+      midRadius * sin(midAngle),
+    );
+
+    canvas.save();
+    canvas.translate(labelCenter.dx, labelCenter.dy);
+
+    double normalizedAngle = midAngle % (2 * pi);
+    if (normalizedAngle < 0) normalizedAngle += 2 * pi;
+
+    double textRotation;
+    if (normalizedAngle > pi / 2 && normalizedAngle < 3 * pi / 2) {
+      textRotation = midAngle + pi / 2 + pi;
+    } else {
+      textRotation = midAngle - pi / 2;
+    }
+
+    canvas.rotate(textRotation);
+    textPainter.paint(
+      canvas,
+      Offset(-textPainter.width / 2, -textPainter.height / 2),
+    );
+    canvas.restore();
+  }
+
+  /// 回退：无缓存时即时创建（仅用于 hit test 等场景）
+  TextPainter? _createLabelFallback(ChineseColor color, double fontSize,
+      double maxWidth, double maxHeight) {
     String label = color.name;
-    TextPainter textPainter;
-
     for (int attempt = 0; attempt < 2; attempt++) {
-      final textStyle = TextStyle(
-        color: color.textColor,
-        fontSize: fontSize,
-        fontWeight: FontWeight.w600,
-      );
-      final textSpan = TextSpan(text: label, style: textStyle);
-      textPainter = TextPainter(
-        text: textSpan,
+      final tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(
+            color: color.textColor,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
       )..layout();
 
-      if (textPainter.width <= arcLength * 1.05 &&
-          textPainter.height <= radialHeight * 0.95) {
-        // 能放下，绘制
-        final labelCenter = Offset(
-          midRadius * cos(midAngle),
-          midRadius * sin(midAngle),
-        );
-
-        canvas.save();
-        canvas.translate(labelCenter.dx, labelCenter.dy);
-
-        // 文字沿切线方向排列，朝向圆环外侧
-        // midAngle 是径向角度，文字沿切线 = midAngle + pi/2 或 midAngle - pi/2
-        // 根据所在半圆决定翻转，确保文字始终朝外（从外向圆心方向可正读）
-        double normalizedAngle = midAngle % (2 * pi);
-        if (normalizedAngle < 0) normalizedAngle += 2 * pi;
-
-        double textRotation;
-        if (normalizedAngle > pi / 2 && normalizedAngle < 3 * pi / 2) {
-          // 左半圆：文字需要翻转，让底部朝向圆心
-          textRotation = midAngle + pi / 2 + pi;
-        } else {
-          // 右半圆：文字底部自然朝向圆心
-          textRotation = midAngle - pi / 2;
-        }
-
-        canvas.rotate(textRotation);
-        textPainter.paint(
-          canvas,
-          Offset(-textPainter.width / 2, -textPainter.height / 2),
-        );
-        canvas.restore();
-        return;
+      if (tp.width <= maxWidth * 1.05 && tp.height <= maxHeight * 0.95) {
+        return tp;
       }
-
-      // 第一次放不下，截断到1个字再试
       if (attempt == 0 && label.length > 1) {
         label = label.substring(0, 1);
       } else {
         break;
       }
     }
+    return null;
   }
 
   void _drawSeparators(Canvas canvas, List<SortedFamily> families,

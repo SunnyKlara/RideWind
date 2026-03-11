@@ -15,6 +15,7 @@
 #include "xuanniu.h"
 #include "engine_audio.h" // ✅ 必须包含，否则远程油门指令无法调用 EngineAudio_Start/Stop
 #include "logo.h"         // 🆕 自定义Logo上传模块
+#include "ota.h"          // 🆕 OTA固件升级模块
 
 // ╔══════════════════════════════════════════════════════════════╗
 // ║          外部变量引用 (来自 xuanniu.c)                        ║
@@ -792,6 +793,14 @@ void BLE_ParseCommand(char* cmd)
         {
             printf("[BLE] GET unknown: %s\r\n", param);
         }
+    }
+    
+    // ════════════════════════════════════════════════════════════
+    // 🆕 OTA固件升级命令: OTA_START, OTA_DATA, OTA_END, OTA_ABORT, OTA_VERSION
+    // ════════════════════════════════════════════════════════════
+    else if (strncmp(cmd, "OTA_", 4) == 0)
+    {
+        OTA_ParseCommand(cmd);
     }
     
     // ════════════════════════════════════════════════════════════

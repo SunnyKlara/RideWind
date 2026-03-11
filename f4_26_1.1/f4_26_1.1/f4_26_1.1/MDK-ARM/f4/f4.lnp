@@ -8,6 +8,7 @@
 "f4\vs1003.o"
 "f4\engine_audio.o"
 "f4\rx.o"
+"f4\ota.o"
 "f4\logo.o"
 "f4\main.o"
 "f4\gpio.o"
