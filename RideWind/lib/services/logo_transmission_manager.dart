@@ -838,7 +838,7 @@ class LogoTransmissionManager {
     if (window.sendBase % 100 == 0 || window.sendBase == totalPackets) {
       logger.logImportant(
         '进度更新: ${(progress * 100).toStringAsFixed(1)}% '
-        '(已确认:${window.sendBase}/${totalPackets})',
+        '(已确认:${window.sendBase}/$totalPackets)',
       );
     }
   }

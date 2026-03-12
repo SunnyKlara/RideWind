@@ -256,17 +256,17 @@ class BluetoothProvider with ChangeNotifier {
     });
 
     // 监听物理连接状态，掉线后及时更新状态，重连后自动同步
-    bool _wasConnected = false;
+    bool wasConnected = false;
     _bleService.connectionStream.listen((connected) async {
       if (!connected) {
         // 断开连接
         _connectedDevice?.isConnected = false;
         _connectedDevice = null;
-        _wasConnected = false;
+        wasConnected = false;
         notifyListeners();
-      } else if (!_wasConnected && _connectedDevice != null) {
+      } else if (!wasConnected && _connectedDevice != null) {
         // 🔄 重连成功，自动查询硬件状态
-        _wasConnected = true;
+        wasConnected = true;
         debugPrint('🔄 检测到重连，开始同步硬件状态...');
         await _syncHardwareStateOnReconnect();
       }

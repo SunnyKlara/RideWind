@@ -28,68 +28,66 @@ class _CachedLabel {
   _CachedLabel({required this.fullPainter, this.shortPainter});
 }
 
-/// 文字标签预渲染缓存
+/// 文字标签懒加载缓存
 ///
-/// 在 initState 时一次性为所有颜色创建多种字号的 TextPainter 并 layout，
-/// 绘制时直接查表，避免每帧重复创建。
+/// 按需创建 TextPainter 并缓存，避免一次性预渲染导致 OOM。
 class LabelCache {
   /// key = "${colorName}_${family}_${fontSize.toStringAsFixed(1)}"
   final Map<String, _CachedLabel> _cache = {};
 
-  /// 预渲染所有颜色在指定字号范围内的文字
-  void preRender(List<SortedFamily> families) {
-    _cache.clear();
-    // 字号范围 4.0 ~ 10.0，步长 0.5（覆盖 clamp 后的所有可能值）
-    final fontSizes = <double>[];
-    for (double fs = 4.0; fs <= 10.0; fs += 0.5) {
-      fontSizes.add(fs);
+  /// 分批预热缓存，每帧处理一批，避免卡顿
+  /// 需要传入一个回调在预热完成后触发重绘
+  void preRender(List<SortedFamily> families, {VoidCallback? onBatchDone}) {
+    _pendingFamilies = families;
+    _onBatchDone = onBatchDone;
+    _warmUpNextBatch();
+  }
+
+  List<SortedFamily>? _pendingFamilies;
+  VoidCallback? _onBatchDone;
+  int _warmUpIndex = 0;
+  static const int _batchSize = 30; // 每帧预热30个颜色
+  // 只预热最常用的字号
+  static const List<double> _warmUpSizes = [6.0, 7.0, 8.0, 9.0, 10.0];
+
+  void _warmUpNextBatch() {
+    final families = _pendingFamilies;
+    if (families == null) return;
+
+    // 收集所有颜色
+    final allColors = <ChineseColor>[];
+    for (final f in families) {
+      allColors.addAll(f.colors);
     }
 
-    for (final family in families) {
-      for (final color in family.colors) {
-        for (final fontSize in fontSizes) {
-          final key = '${color.name}_${color.family}_${fontSize.toStringAsFixed(1)}';
-          if (_cache.containsKey(key)) continue;
+    if (_warmUpIndex >= allColors.length) {
+      _pendingFamilies = null;
+      return;
+    }
 
-          final textColor = color.textColor;
-          final style = TextStyle(
-            color: textColor,
-            fontSize: fontSize,
-            fontWeight: FontWeight.w600,
-          );
-
-          // 完整名字
-          final fullPainter = TextPainter(
-            text: TextSpan(text: color.name, style: style),
-            textDirection: TextDirection.ltr,
-            textAlign: TextAlign.center,
-          )..layout();
-
-          // 截断到1字
-          TextPainter? shortPainter;
-          if (color.name.length > 1) {
-            shortPainter = TextPainter(
-              text: TextSpan(text: color.name.substring(0, 1), style: style),
-              textDirection: TextDirection.ltr,
-              textAlign: TextAlign.center,
-            )..layout();
-          }
-
-          _cache[key] = _CachedLabel(
-            fullPainter: fullPainter,
-            shortPainter: shortPainter,
-          );
+    final end = (_warmUpIndex + _batchSize).clamp(0, allColors.length);
+    for (int i = _warmUpIndex; i < end; i++) {
+      final color = allColors[i];
+      for (final fs in _warmUpSizes) {
+        final key = '${color.name}_${color.family}_${fs.toStringAsFixed(1)}';
+        if (!_cache.containsKey(key)) {
+          _createAndCache(key, color, fs);
         }
       }
     }
+    _warmUpIndex = end;
+    _onBatchDone?.call();
+
+    if (_warmUpIndex < allColors.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _warmUpNextBatch());
+    }
   }
 
-  /// 获取缓存的标签，返回能放进指定区域的 TextPainter，或 null
+  /// 按需获取（或创建）缓存的标签
   TextPainter? get(ChineseColor color, double fontSize,
       double maxWidth, double maxHeight) {
     final key = '${color.name}_${color.family}_${fontSize.toStringAsFixed(1)}';
-    final cached = _cache[key];
-    if (cached == null) return null;
+    final cached = _cache[key] ?? _createAndCache(key, color, fontSize);
 
     // 先试完整名字
     if (cached.fullPainter.width <= maxWidth * 1.05 &&
@@ -105,6 +103,34 @@ class LabelCache {
     }
 
     return null;
+  }
+
+  _CachedLabel _createAndCache(String key, ChineseColor color, double fontSize) {
+    final textColor = color.textColor;
+    final style = TextStyle(
+      color: textColor,
+      fontSize: fontSize,
+      fontWeight: FontWeight.w600,
+    );
+
+    final fullPainter = TextPainter(
+      text: TextSpan(text: color.name, style: style),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    )..layout();
+
+    TextPainter? shortPainter;
+    if (color.name.length > 1) {
+      shortPainter = TextPainter(
+        text: TextSpan(text: color.name.substring(0, 1), style: style),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      )..layout();
+    }
+
+    final label = _CachedLabel(fullPainter: fullPainter, shortPainter: shortPainter);
+    _cache[key] = label;
+    return label;
   }
 }
 

@@ -8,6 +8,7 @@ import 'providers/bluetooth_provider.dart';
 import 'providers/device_provider.dart';
 import 'services/engine_audio_manager.dart';
 import 'services/first_launch_manager.dart';
+import 'widgets/app_update_dialog.dart';
 
 void main() async {
   // 🔧 全局错误处理（捕获Release模式下的未处理异常）
@@ -52,10 +53,31 @@ void main() async {
   });
 }
 
-class RideWindApp extends StatelessWidget {
+class RideWindApp extends StatefulWidget {
   final bool isFirstLaunch;
   
   const RideWindApp({super.key, required this.isFirstLaunch});
+
+  @override
+  State<RideWindApp> createState() => _RideWindAppState();
+}
+
+class _RideWindAppState extends State<RideWindApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // 延迟3秒检查更新，等页面加载完
+    Future.delayed(const Duration(seconds: 3), _checkUpdate);
+  }
+
+  Future<void> _checkUpdate() async {
+    final ctx = _navigatorKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      AppUpdateDialog.checkAndShow(ctx);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +87,7 @@ class RideWindApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => DeviceProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: _navigatorKey,
         title: 'RideWind',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -78,9 +101,7 @@ class RideWindApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        // 首次启动：显示 SplashScreen（用户协议 + 引导流程）
-        // 非首次启动：直接进入添加设备页面
-        home: isFirstLaunch ? const SplashScreen() : const NoDeviceScreen(),
+        home: widget.isFirstLaunch ? const SplashScreen() : const NoDeviceScreen(),
       ),
     );
   }

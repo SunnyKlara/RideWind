@@ -309,7 +309,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
   // ========== 🏃 Running Mode 专用状态 ==========
   int _currentSpeed = 0;
-  int _maxSpeed = 340;
+  final int _maxSpeed = 340;
   DateTime _lastCommandTime = DateTime.now();
 
   // ========== 🎨 Colorize Mode 专用状态 ==========
@@ -1061,8 +1061,9 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
     while (_isSpinning && mounted) {
       for (int i = 0; i <= totalItems - 1; i += 3) {
-        if (!_isSpinning || !mounted || !_colorPageController.hasClients)
+        if (!_isSpinning || !mounted || !_colorPageController.hasClients) {
           return;
+        }
 
         final pos = i.clamp(0, totalItems - 1);
         final progress = pos / (totalItems - 1);
@@ -1085,8 +1086,9 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
       }
 
       for (int i = totalItems - 1; i >= 0; i -= 3) {
-        if (!_isSpinning || !mounted || !_colorPageController.hasClients)
+        if (!_isSpinning || !mounted || !_colorPageController.hasClients) {
           return;
+        }
 
         final pos = i.clamp(0, totalItems - 1);
         final progress = pos / (totalItems - 1);
@@ -1654,47 +1656,6 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
         // ========== 📋 菜单按钮 ==========
         if (!(_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail))
-
-        // ========== 🎨 传统色彩圆盘入口按钮（仅 RGB 调色模式显示）==========
-        if (_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail)
-          Positioned(
-            top: config.backButtonTop,
-            left: config.backButtonLeft + config.backButtonSize + 4,
-            child: GestureDetector(
-              onTap: _openChineseColorWheel,
-              child: Container(
-                width: config.backButtonSize,
-                height: config.backButtonSize,
-                alignment: Alignment.center,
-                child: Container(
-                  width: config.backButtonSize * 0.75,
-                  height: config.backButtonSize * 0.75,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white70, width: 2.0),
-                    gradient: const SweepGradient(
-                      colors: [
-                        Color(0xFFFF4500), // 朱砂红
-                        Color(0xFFE2C100), // 藤黄
-                        Color(0xFF2BAE66), // 竹绿
-                        Color(0xFF1661AB), // 石青
-                        Color(0xFF8B2671), // 紫棠
-                        Color(0xFFFF4500), // 回到起点
-                      ],
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.palette_outlined,
-                    color: Colors.white,
-                    size: config.backButtonSize * 0.35,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-        // ========== 📋 菜单按钮 ==========
-        if (!(_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail))
           Positioned(
             top: config.menuButtonTop,
             right: config.menuButtonRight,
@@ -2004,48 +1965,6 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             ),
           ),
         ),
-
-        // ========== 📋 菜单按钮（RGB详细调节时隐藏）==========
-        if (!(_currentMode == ControlMode.colorize &&
-            _colorizeState == ColorizeState.rgbDetail))
-
-        // ========== 🎨 传统色彩圆盘入口按钮（仅 RGB 调色模式显示）==========
-        if (_currentMode == ControlMode.colorize && _colorizeState == ColorizeState.rgbDetail)
-          Positioned(
-            top: config.backButtonTop,
-            left: config.backButtonLeft + config.backButtonSize + 4,
-            child: GestureDetector(
-              onTap: _openChineseColorWheel,
-              child: Container(
-                width: config.backButtonSize,
-                height: config.backButtonSize,
-                alignment: Alignment.center,
-                child: Container(
-                  width: config.backButtonSize * 0.75,
-                  height: config.backButtonSize * 0.75,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white70, width: 2.0),
-                    gradient: const SweepGradient(
-                      colors: [
-                        Color(0xFFFF4500),
-                        Color(0xFFE2C100),
-                        Color(0xFF2BAE66),
-                        Color(0xFF1661AB),
-                        Color(0xFF8B2671),
-                        Color(0xFFFF4500),
-                      ],
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.palette_outlined,
-                    color: Colors.white,
-                    size: config.backButtonSize * 0.35,
-                  ),
-                ),
-              ),
-            ),
-          ),
 
         // ========== 📋 菜单按钮（RGB详细调节时隐藏）==========
         if (!(_currentMode == ControlMode.colorize &&
@@ -2733,7 +2652,11 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             children: [
               // 🎨 传统色彩圆盘入口按钮
               GestureDetector(
-                onTap: _openChineseColorWheel,
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  debugPrint('🎨 色环按钮被点击');
+                  _openChineseColorWheel();
+                },
                 child: Container(
                   width: 36,
                   height: 36,
@@ -3358,22 +3281,37 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
   /// 🎨 打开色彩圆环界面
   void _openChineseColorWheel() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ColorRingScreen(
-          onColorSelected: (r, g, b) {
-            final pos = _selectedLightPosition;
-            setState(() {
-              _redValues[pos] = r;
-              _greenValues[pos] = g;
-              _blueValues[pos] = b;
-            });
-            _syncLEDColor();
-            _markCustomColors();
+    debugPrint('🎨 _openChineseColorWheel 开始导航');
+    try {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) {
+            debugPrint('🎨 ColorRingScreen builder 被调用');
+            return ColorRingScreen(
+              onColorSelected: (r, g, b) {
+                final pos = _selectedLightPosition;
+                setState(() {
+                  _redValues[pos] = r;
+                  _greenValues[pos] = g;
+                  _blueValues[pos] = b;
+                });
+                _syncLEDColor();
+                _markCustomColors();
+              },
+            );
           },
         ),
-      ),
-    );
+      ).then((_) {
+        debugPrint('🎨 导航返回');
+      }).catchError((e, stack) {
+        debugPrint('🎨 导航异常: $e');
+        debugPrint('📍 堆栈: $stack');
+      });
+      debugPrint('🎨 Navigator.push 已调用');
+    } catch (e, stack) {
+      debugPrint('🎨 同步异常: $e');
+      debugPrint('📍 堆栈: $stack');
+    }
   }
 
   /// 🎨 RGB 数值输入：焦点变化回调
@@ -3637,26 +3575,29 @@ class _PowerSliderDialogState extends State<_PowerSliderDialog> {
   void _onVerticalDragEnd(DragEndDetails details) async {
     if (_sliderY <= -_triggerThreshold) {
       HapticFeedback.heavyImpact();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _sliderY = 0.0;
           _isDragging = false;
         });
+      }
       await widget.onShutdown();
     } else if (_sliderY >= _triggerThreshold) {
       HapticFeedback.heavyImpact();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _sliderY = 0.0;
           _isDragging = false;
         });
+      }
       await widget.onReboot();
     } else {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _sliderY = 0.0;
           _isDragging = false;
         });
+      }
     }
   }
 

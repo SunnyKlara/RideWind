@@ -12,7 +12,7 @@ import 'package:ridewind/main.dart';
 void main() {
   testWidgets('RideWind app smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const RideWindApp());
+    await tester.pumpWidget(const RideWindApp(isFirstLaunch: true));
 
     // Verify that the app launches and shows the splash screen
     expect(find.text('RideWind'), findsOneWidget);

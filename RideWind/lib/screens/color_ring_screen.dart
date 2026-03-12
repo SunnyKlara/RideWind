@@ -86,7 +86,9 @@ class _ColorRingScreenState extends State<ColorRingScreen>
       parent: _popupController,
       curve: Curves.easeOutBack,
     );
-    _labelCache = LabelCache()..preRender(_sortedFamilies);
+    _labelCache = LabelCache()..preRender(_sortedFamilies, onBatchDone: () {
+      if (mounted) setState(() {});
+    });
   }
 
   @override

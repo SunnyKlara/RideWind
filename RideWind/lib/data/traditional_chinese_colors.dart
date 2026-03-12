@@ -827,7 +827,7 @@ class TraditionalChineseColors {
         return n;
       }
     }
-    return '${name}色';
+    return '$name色';
   }
 
   static const _grayNames2 = [

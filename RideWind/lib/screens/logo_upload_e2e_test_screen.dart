@@ -33,7 +33,7 @@ class _LogoUploadE2ETestScreenState extends State<LogoUploadE2ETestScreen> {
 
   // 多槽位支持
   int _selectedSlot = 0;  // 当前选择的上传槽位 (0-2)
-  List<bool> _slotStatus = [false, false, false];  // 各槽位状态
+  final List<bool> _slotStatus = [false, false, false];  // 各槽位状态
   int _activeSlot = 0;  // 当前激活的槽位
 
   // 预处理器和验证器

@@ -14,8 +14,8 @@ class _SmokeParticle {
   _SmokeParticle({
     required this.x,
     required this.y,
-    required this.streamIndex,
     this.age = 1.0,
+    required this.streamIndex,
   });
 }
 
