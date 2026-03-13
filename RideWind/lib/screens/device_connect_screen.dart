@@ -324,6 +324,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
   int _selectedColorIndex = 0;
   late PageController _colorPageController;
+  Key _colorPageViewKey = UniqueKey();
 
   // ========== 🎰 转盘抽奖动画状态 ==========
   bool _isSpinning = false;
@@ -488,7 +489,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
     _modePageController = PageController(initialPage: _currentModeIndex);
     debugPrint('🚀 [1/5] PageController 初始化完成');
 
-    // 初始化颜色条PageView控制器
+    // 初始化颜色条PageView控制器（先用临时值，恢复偏好后会重建）
     _colorPageController = PageController(
       initialPage: 0,
       viewportFraction: 0.155,
@@ -497,16 +498,13 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('🚀 [3/5] PostFrameCallback 开始执行');
-      if (_colorPageController.hasClients) {
-          _colorPageController.jumpTo(0);
-        }
         // 🔑 连接后同步硬件UI到Running Mode
         debugPrint('🚀 [3a] 准备调用 _syncHardwareUIOnInit');
         _syncHardwareUIOnInit();
         // 📚 检查并显示 Running Mode 引导（首次进入时）
         debugPrint('🚀 [3b] 准备调用 _checkAndShowRunningModeGuide');
         _checkAndShowRunningModeGuide();
-        // 💾 恢复用户偏好设置
+        // 💾 恢复用户偏好设置（会重建 _colorPageController）
         debugPrint('🚀 [3c] 准备调用 _restoreUserPreferences');
         _restoreUserPreferences();
         debugPrint('🚀 [3/5] PostFrameCallback 执行完成');
@@ -611,9 +609,16 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         }
       }
 
-      // 同步颜色预设到 PageController
-      if (_colorPageController.hasClients && _selectedColorIndex > 0) {
-        _colorPageController.jumpToPage(_selectedColorIndex);
+      // 用正确的 initialPage 重建 PageController，确保 PageView 从一开始就定位在保存的索引
+      if (_selectedColorIndex > 0) {
+        _colorPageController.dispose();
+        _colorPageController = PageController(
+          initialPage: _selectedColorIndex,
+          viewportFraction: 0.155,
+        );
+        _colorPageViewKey = UniqueKey();
+        setState(() {}); // 触发重建，让 PageView 使用新的 controller 和 key
+        debugPrint('💾 重建 ColorPageController: initialPage=$_selectedColorIndex');
       }
 
       // 🎨 恢复自定义 RGB 颜色状态
@@ -2092,6 +2097,13 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
           _currentModeIndex = index;
           if (index == 2) {
             _colorizeState = ColorizeState.preset;
+            // 重建 PageController 确保 initialPage 对齐当前选中的颜色索引
+            _colorPageController.dispose();
+            _colorPageController = PageController(
+              initialPage: _selectedColorIndex,
+              viewportFraction: 0.155,
+            );
+            _colorPageViewKey = UniqueKey();
           }
         });
         _syncHardwareUIOnModeChange(index);
@@ -2129,8 +2141,11 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
         if (_lastSentHardwareUI != 2) {
           await btProvider.setHardwareUI(2);
           _lastSentHardwareUI = 2;
-          // 🎨 进入Colorize模式时查询当前预设，同步倒三角指示器
-          _queryAndSyncPreset();
+          // 🎨 进入Colorize模式时，将本地保存的预设同步到硬件，而非从硬件查询
+          // 这样可以保持用户上次选择的颜色预设
+          if (!_hasCustomColors) {
+            _syncPresetToHardware(_selectedColorIndex);
+          }
         }
         break;
     }
@@ -3086,6 +3101,7 @@ class _DeviceConnectScreenState extends State<DeviceConnectScreen> {
             child: SizedBox(
               height: capsuleHeight + 30,
               child: PageView.builder(
+                key: _colorPageViewKey,
                 controller: _colorPageController,
                 padEnds: true,
                 physics: _isSpinning

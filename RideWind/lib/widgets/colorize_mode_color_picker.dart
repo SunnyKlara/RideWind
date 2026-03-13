@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/preference_service.dart';
 import 'triangle_indicator_painter.dart';
 
 /// Colorize Mode - 调色界面组件
@@ -26,8 +27,10 @@ class ColorizeModeColorPicker extends StatefulWidget {
 }
 
 class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
-  late PageController _colorPageController;
+  PageController? _colorPageController;
   int _selectedColorIndex = 0;
+  bool _initialized = false;
+  final PreferenceService _prefService = PreferenceService();
 
   // UI 参数
   static const double capsuleWidth = 47.0;
@@ -62,26 +65,40 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
   @override
   void initState() {
     super.initState();
-    _colorPageController = PageController(
-      initialPage: 0,
-      viewportFraction: 0.155,
-    );
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_colorPageController.hasClients) {
-        _colorPageController.jumpTo(0);
-      }
+    _initWithSavedPreset();
+  }
+
+  /// 先读取持久化索引，再初始化 PageController
+  Future<void> _initWithSavedPreset() async {
+    final savedIndex = await _prefService.getColorPreset();
+    if (!mounted) return;
+    setState(() {
+      _selectedColorIndex = (savedIndex >= 0 && savedIndex < 9) ? savedIndex : 0;
+      _colorPageController = PageController(
+        initialPage: _selectedColorIndex,
+        viewportFraction: 0.155,
+      );
+      _initialized = true;
     });
   }
 
   @override
   void dispose() {
-    _colorPageController.dispose();
+    _colorPageController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_initialized) {
+      return const Positioned(
+        top: 540,
+        left: 0,
+        right: 0,
+        child: SizedBox.shrink(),
+      );
+    }
+
     return Positioned(
       top: 540,
       left: 0,
@@ -123,7 +140,7 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
         child: SizedBox(
           height: 153,
           child: PageView.builder(
-            controller: _colorPageController,
+            controller: _colorPageController!,
             padEnds: false,
             clipBehavior: Clip.none,
             physics: const ClampingScrollPhysics(),
@@ -132,6 +149,10 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
                 _selectedColorIndex = index;
               });
               HapticFeedback.selectionClick();
+              // 持久化保存选择的颜色预设索引
+              if (index < 9) {
+                _prefService.saveColorPreset(index);
+              }
               debugPrint('✅ 页面切换到索引: $index');
             },
             itemCount: _colorCapsules.length,
@@ -175,6 +196,9 @@ class _ColorizeModeColorPickerState extends State<ColorizeModeColorPicker> {
         
         HapticFeedback.mediumImpact();
         debugPrint('🎨 选择颜色：索引 $index');
+        
+        // 持久化保存选择的颜色预设索引
+        _prefService.saveColorPreset(index);
         
         // 提取颜色值
         Color selectedColor;

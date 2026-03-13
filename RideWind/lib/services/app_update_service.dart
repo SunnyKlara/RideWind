@@ -122,50 +122,6 @@ class AppUpdateService {
         cancelToken: _cancelToken,
         onReceiveProgress: (received, total) {
           if (total > 0) {
-            final progress = received / total;
-            onProgress?.call(progress);
-          }
-        },
-      );
-
-      debugPrint('✅ 下载完成: $fil
-  /// 下载并安装APK
-  Future<void> downloadAndInstall(
-    AppVersionInfo info, {
-    ValueChanged<double>? onProgress,
-    VoidCallback? onComplete,
-    ValueChanged<String>? onError,
-  }) async {
-    if (_isDownloading) return;
-    _isDownloading = true;
-    _cancelToken = CancelToken();
-
-    try {
-      final dir = await getExternalStorageDirectory();
-      if (dir == null) {
-        onError?.call('无法获取存储目录');
-        return;
-      }
-
-      final downloadDir = Directory('${dir.path}/Download');
-      if (!downloadDir.existsSync()) {
-        downloadDir.createSync(recursive: true);
-      }
-
-      final filePath = '${downloadDir.path}/RideWind-${info.version}.apk';
-      final file = File(filePath);
-      if (file.existsSync()) {
-        file.deleteSync();
-      }
-
-      debugPrint('下载APK: ${info.downloadUrl}');
-
-      await _dio.download(
-        info.downloadUrl,
-        filePath,
-        cancelToken: _cancelToken,
-        onReceiveProgress: (received, total) {
-          if (total > 0) {
             onProgress?.call(received / total);
           }
         },
